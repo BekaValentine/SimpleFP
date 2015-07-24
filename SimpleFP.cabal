@@ -21,7 +21,7 @@ library
                        Basic.TypeChecking,
                        Core.Evaluation,
                        Core.Parser,
-                       Core.Programs,
+                       Core.Program,
                        Core.Term,
                        Core.Type,
                        Monadic.Elaboration,

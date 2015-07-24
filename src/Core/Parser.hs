@@ -7,7 +7,7 @@ import Text.ParserCombinators.Parsec
 
 import Core.Term
 import Core.Type
-import Core.Programs
+import Core.Program
 
 
 

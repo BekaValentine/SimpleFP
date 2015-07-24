@@ -1,4 +1,4 @@
-module Core.Programs where
+module Core.Program where
 
 import Data.List (intercalate)
 
