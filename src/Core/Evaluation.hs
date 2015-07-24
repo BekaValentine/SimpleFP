@@ -20,9 +20,20 @@ data Value
   = Clo Env String Term
   | ConVal String [Value]
 
+data ValueParenLoc = RootValue | CloBody | ConValArg
+  deriving (Eq)
+
 instance Show Value where
-  show (Clo _ _ _)   = "<closure>"
-  show (ConVal c as) = c ++ "(" ++ intercalate "," (map show as) ++ ")"
+  show t = aux RootValue t
+    where
+      aux c t
+        = let (cs,str) = case t of
+                Clo _ x b   -> ([RootValue,CloBody], "\\" ++ x ++ " -> " ++ show b)
+                ConVal c [] -> ([RootValue,CloBody,ConValArg], c)
+                ConVal c as -> ([RootValue,CloBody], c ++ " " ++ intercalate " " (map (aux ConValArg) as))
+          in if c `elem` cs
+             then str
+             else "(" ++ str ++ ")"
 
 
 

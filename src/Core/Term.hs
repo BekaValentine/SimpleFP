@@ -24,7 +24,8 @@ instance Show Term where
                 Ann m t   -> ([RootTerm,LamBody,ConArg,CaseArg], aux AnnLeft m ++ " : " ++ show t)
                 Lam x b   -> ([RootTerm,LamBody,ConArg,CaseArg], "\\" ++ x ++ " -> " ++ aux LamBody b)
                 App f a   -> ([RootTerm,AnnLeft,LamBody,AppLeft,ConArg,CaseArg], aux AppLeft f ++ " " ++ aux AppRight a)
-                Con c as  -> ([RootTerm,AnnLeft,LamBody,AppLeft,ConArg,CaseArg], c ++ "(" ++ intercalate "," (map (aux ConArg) as) ++ ")")
+                Con c []  -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg], c)
+                Con c as  -> ([RootTerm,AnnLeft,LamBody,CaseArg], c ++ " " ++ intercalate " " (map (aux ConArg) as))
                 Case m cs -> ([RootTerm,LamBody,ConArg], "case " ++ aux CaseArg m ++ " of " ++ intercalate " | " (map show cs) ++ " end")
           in if c `elem` cs
              then str
@@ -41,6 +42,17 @@ data Pattern
   = VarPat String
   | ConPat String [Pattern]
 
+data PatternParenLoc = RootPattern | ConPatArg
+  deriving (Eq)
+
 instance Show Pattern where
-  show (VarPat x) = x
-  show (ConPat c as) = c ++ "(" ++ intercalate "," (map show as) ++ ")"
+  show t = aux RootPattern t
+    where
+      aux c t
+        = let (cs,str) = case t of
+                VarPat x    -> ([RootPattern,ConPatArg], x)
+                ConPat c [] -> ([RootPattern,ConPatArg], c)
+                ConPat c as -> ([RootPattern], c ++ " " ++ intercalate " " (map (aux ConPatArg) as))
+          in if c `elem` cs
+             then str
+             else "(" ++ str ++ ")"

@@ -101,28 +101,42 @@ application = do f <- appFun
                  as <- many (try appArg)
                  return $ foldl' App f (a:as)
 
+noArgConData :: GenParser Char st Term
+noArgConData = do c <- decName
+                  return $ Con c []
+
+argConData :: GenParser Char st Term
+argConData = do c <- decName
+                as <- many1 conArg
+                return $ Con c as
+
 conData :: GenParser Char st Term
-conData = do c <- decName
-             as <- between
-                     (symbol "(")
-                     (symbol ")")
-                     (conArg `sepBy` symbol ",")
-             return $ Con c as
+conData = try argConData <|> noArgConData
 
 varPattern :: GenParser Char st Pattern
 varPattern = VarPat <$> varName
 
+noArgConPattern :: GenParser Char st Pattern
+noArgConPattern = do c <- decName
+                     return $ ConPat c []
+
+argConPattern = do c <- decName
+                   ps <- many1 argConPatternArg
+                   return $ ConPat c ps
+
 conPattern :: GenParser Char st Pattern
-conPattern = do c <- decName
-                ps <- between
-                        (symbol "(")
-                        (symbol ")")
-                        (pattern `sepBy` symbol ",")
-                return $ ConPat c ps
+conPattern = try argConPattern <|> noArgConPattern
+
+parenPattern :: GenParser Char st Pattern
+parenPattern = between (symbol "(")
+                       (symbol ")")
+                       pattern
+
+argConPatternArg :: GenParser Char st Pattern
+argConPatternArg = tryMulti [parenPattern,noArgConPattern] varPattern
 
 pattern :: GenParser Char st Pattern
-pattern = try conPattern
-      <|> varPattern
+pattern = tryMulti [parenPattern,conPattern] varPattern
 
 clause :: GenParser Char st Clause
 clause = do p <- pattern
@@ -155,10 +169,10 @@ appFun :: GenParser Char st Term
 appFun = tryMulti [parenTerm] variable
 
 appArg :: GenParser Char st Term
-appArg = tryMulti [parenTerm] variable
+appArg = tryMulti [parenTerm,noArgConData] variable
 
 conArg :: GenParser Char st Term
-conArg = tryMulti [parenTerm,lambda,conData,caseExp,{-annotation,-}application] variable
+conArg = tryMulti [parenTerm,lambda,noArgConData,caseExp,{-annotation,-}application] variable
 
 caseArg :: GenParser Char st Term
 caseArg = tryMulti [parenTerm,lambda,conData,{-annotation,-}application] variable
@@ -185,13 +199,20 @@ termDecl = do _ <- symbol "let"
               _ <- symbol "end"
               return $ TermDeclaration x t m
 
+noArgAlternative :: GenParser Char st (String,[Type])
+noArgAlternative = do c <- decName
+                      return $ (c,[])
+
+argAlternative :: GenParser Char st (String,[Type])
+argAlternative = do c <- decName
+                    as <- many1 argAlternativeArg --datatype
+                    return $ (c,as)
+
+argAlternativeArg :: GenParser Char st Type
+argAlternativeArg = try parenType <|> typeCon
+
 alternative :: GenParser Char st (String,[Type])
-alternative = do c <- decName
-                 as <- between
-                         (symbol "(")
-                         (symbol ")")
-                         (datatype `sepBy` symbol ",")
-                 return $ (c,as)
+alternative = try argAlternative <|> noArgAlternative
 
 emptyTypeDecl :: GenParser Char st TypeDeclaration
 emptyTypeDecl = do _ <- symbol "data"

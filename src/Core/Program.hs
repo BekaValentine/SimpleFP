@@ -28,10 +28,12 @@ instance Show TypeDeclaration where
     = "data " ++ tycon ++ " end"
   show (TypeDeclaration tycon alts)
     = "data " ++ tycon ++ " = "
-   ++ intercalate " | " [ c ++ "(" ++ intercalate "," (map show args) ++ ")"
-                        | (c,args) <- alts
-                        ]
+   ++ intercalate " | " (map showAlt alts)
    ++ " end"
+   where
+     showAlt :: String -> [Type] -> String
+     showAlt c [] = c
+     showAlt c as = c ++ " " ++ intercalate " " (map show args)
 
 
 
