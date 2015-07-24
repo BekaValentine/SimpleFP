@@ -7,7 +7,7 @@ import Data.Maybe (isJust)
 
 import Core.Term
 import Core.Type
-import Core.Programs
+import Core.Program
 
 import Monadic.TypeChecking hiding (signature,context)
 
