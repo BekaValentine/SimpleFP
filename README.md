@@ -1,6 +1,8 @@
 # SimpleFP
 A series of implementations of a simple functional programming language.
 
+The `Core` modules define the language proper. The `Basic` modules define a basic type checking and elaboration module that manually threads information around, and a REPL that uses those. The `Monadic` modules clean up the `Basic` modules by using a monadic style for managing information.
+
 You can try this out in cabal by doing `cabal repl` to load it up, then
 
     Basic.REPL.replFile "src/Demos.sfp"
