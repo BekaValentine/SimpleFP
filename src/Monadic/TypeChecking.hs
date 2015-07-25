@@ -12,7 +12,6 @@ import Core.Evaluation
 
 
 
-
 -- Signatures
 
 data ConSig = ConSig [Type] Type
