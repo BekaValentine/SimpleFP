@@ -18,8 +18,8 @@ data TermParenLoc = RootTerm | AnnLeft | LamBody | AppLeft | AppRight | ConArg |
 instance Show Term where
   show t = aux RootTerm t
     where
-      aux c t
-        = let (cs, str) = case t of
+      aux loc t
+        = let (locs, str) = case t of
                 Var x     -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg], x)
                 Ann m t   -> ([RootTerm,LamBody,ConArg,CaseArg], aux AnnLeft m ++ " : " ++ show t)
                 Lam x b   -> ([RootTerm,LamBody,ConArg,CaseArg], "\\" ++ x ++ " -> " ++ aux LamBody b)
@@ -27,7 +27,7 @@ instance Show Term where
                 Con c []  -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg], c)
                 Con c as  -> ([RootTerm,AnnLeft,LamBody,CaseArg], c ++ " " ++ intercalate " " (map (aux ConArg) as))
                 Case m cs -> ([RootTerm,LamBody,ConArg], "case " ++ aux CaseArg m ++ " of " ++ intercalate " | " (map show cs) ++ " end")
-          in if c `elem` cs
+          in if loc `elem` locs
              then str
              else "(" ++ str ++ ")"
 
