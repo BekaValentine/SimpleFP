@@ -117,7 +117,7 @@ check :: Signature -> Context -> Term -> Type -> Bool
 check sig ctx (Var x)     t = case infer sig ctx (Var x) of
                                 Just t' -> t == t'
                                 Nothing -> False
-check sig ctx (Ann m t')  t = t == t' && check sig ctx m t
+check sig ctx (Ann m t')  t = t == t' && check sig ctx m t'
 check sig ctx (Lam x b)   t = case t of
                                 Fun arg ret
                                   -> check sig (HasType x arg : ctx) b ret

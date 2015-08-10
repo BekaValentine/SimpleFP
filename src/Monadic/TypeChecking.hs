@@ -156,7 +156,7 @@ check :: Term -> Type -> TypeChecker ()
 check (Var x)     t = do t' <- infer (Var x)
                          guard $ t == t'
 check (Ann m t')  t = do guard $ t == t'
-                         check m t
+                         check m t'
 check (Lam x b)   t = case t of
                         Fun arg ret
                           -> do ctx <- context
