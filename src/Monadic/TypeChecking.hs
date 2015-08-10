@@ -153,20 +153,20 @@ inferClauses patTy cs = do ts <- sequence $ map (inferClause patTy) cs
 -- Type Checking
 
 check :: Term -> Type -> TypeChecker ()
-check (Var x)    t  = do t' <- infer (Var x)
+check (Var x)     t = do t' <- infer (Var x)
                          guard $ t == t'
-check (Ann m t') t  = do guard $ t == t'
+check (Ann m t')  t = do guard $ t == t'
                          check m t
-check (Lam x b)  t  = case t of
+check (Lam x b)   t = case t of
                         Fun arg ret
                           -> do ctx <- context
                                 extend [HasType x arg]
                                      $ check b ret
                         _ -> failure
-check (App f a)  t  = do Fun arg ret <- infer f
+check (App f a)   t = do Fun arg ret <- infer f
                          guard $ ret == t
                          check a arg
-check (Con c as) t  = do t' <- infer (Con c as)
+check (Con c as)  t = do t' <- infer (Con c as)
                          guard $ t == t'
 check (Case m cs) t = do t' <- infer m
                          checkClauses t' cs t

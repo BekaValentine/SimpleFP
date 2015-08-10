@@ -114,19 +114,19 @@ inferClauses sig ctx patTy cs = let mts = sequence $ do
 -- Type Checking
 
 check :: Signature -> Context -> Term -> Type -> Bool
-check sig ctx (Var x)    t  = case infer sig ctx (Var x) of
+check sig ctx (Var x)     t = case infer sig ctx (Var x) of
                                 Just t' -> t == t'
                                 Nothing -> False
-check sig ctx (Ann m t') t  = t == t' && check sig ctx m t
-check sig ctx (Lam x b)  t  = case t of
+check sig ctx (Ann m t')  t = t == t' && check sig ctx m t
+check sig ctx (Lam x b)   t = case t of
                                 Fun arg ret
                                   -> check sig (HasType x arg : ctx) b ret
                                 _ -> False
-check sig ctx (App f a)  t  = case infer sig ctx f of
+check sig ctx (App f a)   t = case infer sig ctx f of
                                 Just (Fun arg ret)
                                   -> ret == t && check sig ctx a arg
                                 _ -> False
-check sig ctx (Con c as) t  = case infer sig ctx (Con c as) of
+check sig ctx (Con c as)  t = case infer sig ctx (Con c as) of
                                 Nothing -> False
                                 Just t' -> t == t'
 check sig ctx (Case m cs) t = case infer sig ctx m of
