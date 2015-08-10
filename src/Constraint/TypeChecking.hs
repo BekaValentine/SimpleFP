@@ -39,7 +39,9 @@ lookupSignature :: String -> Signature -> Maybe ConSig
 lookupSignature c (Signature _ consigs) = lookup c consigs
 
 
+
 -- Pattern Types
+ 
 data PatternType
   = PTyCon String
   | PFun PatternType PatternType
@@ -113,7 +115,8 @@ contextToPatternContext :: Context -> PatternContext
 contextToPatternContext = map declarationToPatternDeclaration
 
 
-data TCProblem = TCProblem PatternContext Term PatternType
+
+-- Unifying Type Checkers
 
 data Equation = Equation PatternType PatternType
 
@@ -169,20 +172,22 @@ occurs x (PFun a b) = occurs x a || occurs x b
 occurs x (PMeta y)  = x == y
 
 
-solve :: [Equation] -> Substitution -> Maybe Substitution
-solve [] subs' = return subs'
-solve (Equation (PMeta x) t2 : eqs) subs'
-  = do guard (not (occurs x t2))
-       solve eqs (M.insert x t2 subs')
-solve (Equation t1 (PMeta y) : eqs) subs'
-  = do guard (not (occurs y t1))
-       solve eqs (M.insert y t1 subs')
-solve (Equation (PTyCon tycon1) (PTyCon tycon2) : eqs) subs'
-  = do guard (tycon1 == tycon2)
-       solve eqs subs'
-solve (Equation (PFun a1 b1) (PFun a2 b2) : eqs) subs'
-  = solve (Equation a1 a2 : Equation b1 b2 : eqs) subs'
-solve _ _ = Nothing
+solve :: [Equation] -> Maybe Substitution
+solve eqs = go eqs M.empty
+  where
+    go [] subs' = return subs'
+    go (Equation (PMeta x) t2 : eqs) subs'
+      = do guard (not (occurs x t2))
+           go eqs (M.insert x t2 subs')
+    go (Equation t1 (PMeta y) : eqs) subs'
+      = do guard (not (occurs y t1))
+           go eqs (M.insert y t1 subs')
+    go (Equation (PTyCon tycon1) (PTyCon tycon2) : eqs) subs'
+      = do guard (tycon1 == tycon2)
+           go eqs subs'
+    go (Equation (PFun a1 b1) (PFun a2 b2) : eqs) subs'
+      = go (Equation a1 a2 : Equation b1 b2 : eqs) subs'
+    go _ _ = Nothing
 
 
 addSubstitutions :: Substitution -> TypeChecker ()
@@ -201,7 +206,7 @@ addSubstitutions subs'
 
 
 unify :: PatternType -> PatternType -> TypeChecker ()
-unify p q = case solve [Equation p q] M.empty of
+unify p q = case solve [Equation p q] of
               Nothing    -> failure
               Just subs' -> addSubstitutions subs'
 
@@ -214,26 +219,12 @@ instantiate (PMeta x)          = do subs <- substitution
                                     return $ fromMaybe (PMeta x) (M.lookup x subs)
 
 
+
 typeInContext :: String -> TypeChecker PatternType
 typeInContext n = do ctx <- context
                      case lookupContext n ctx of
                        Nothing -> failure
                        Just t  -> return t
-
-
-hasTypeInContext :: String -> PatternType -> TypeChecker ()
-hasTypeInContext n ty = do ctx <- context
-                           case lookupContext n ctx of
-                             Nothing  -> failure
-                             Just ty' -> case solve [Equation ty ty'] M.empty of
-                               Nothing    -> failure
-                               Just subs' -> addSubstitutions subs'
-
-
-tyconExists :: String -> TypeChecker ()
-tyconExists n = do Signature tycons _ <- signature
-                   guard $ n `elem` tycons
-
 
 typeInSignature :: String -> TypeChecker ConSig
 typeInSignature n = do Signature _ consigs <- signature
@@ -241,62 +232,104 @@ typeInSignature n = do Signature _ consigs <- signature
                          Nothing -> failure
                          Just t  -> return t
 
+tyconExists :: String -> TypeChecker ()
+tyconExists n = do Signature tycons _ <- signature
+                   guard $ n `elem` tycons
+
+
+
+-- Type well-formedness
 
 isType :: Type -> TypeChecker ()
 isType (TyCon tc) = tyconExists tc
 isType (Fun a b)  = isType a >> isType b
 
 
-checkifyConData :: String -> [Term] -> PatternType -> TypeChecker ()
-checkifyConData c as ty = do sig <- signature
-                             case lookupSignature c sig of
-                               Nothing -> failure
-                               Just (ConSig args ret) -> do
-                                 guard $ length as == length args
-                                 unify ty (typeToPatternType ret)
-                                 sequence_ $ zipWith (\a ty -> checkify a (typeToPatternType ty)) as args
+
+-- Type Inference
+
+inferify :: Term -> TypeChecker PatternType
+inferify (Var x)     = typeInContext x
+inferify (Ann m t)   = do let pt = typeToPatternType t
+                          checkify m pt
+                          return pt
+inferify (Lam x b)   = failure
+inferify (App f a)   = do PFun arg ret <- inferify f
+                          checkify a arg
+                          return ret
+inferify (Con c as)  = do ConSig args ret <- typeInSignature c
+                          guard $ length as == length args
+                          sequence_ (zipWith checkify as (map typeToPatternType args))
+                          return (typeToPatternType ret)
+inferify (Case m cs) = do t <- inferify m
+                          t' <- inferifyClauses t cs
+                          return t'
+
+inferifyClause :: PatternType -> Clause -> TypeChecker PatternType
+inferifyClause patTy (Clause p b) = do ctx' <- checkifyPattern p patTy
+                                       ctx <- context
+                                       extend ctx'
+                                            $ inferify b
+
+
+inferifyClauses :: PatternType -> [Clause] -> TypeChecker PatternType
+inferifyClauses patTy cs = do ts <- sequence $ map (inferifyClause patTy) cs
+                              case ts of
+                                t:ts -> do
+                                  sequence_ (map (unify t) ts)
+                                  t' <- instantiate t
+                                  return t'
+                                _ -> failure
+
+
+
+-- Type Checking
+
+checkify :: Term -> PatternType -> TypeChecker ()
+checkify (Var x)     t = do t' <- inferify (Var x)
+                            unify t t'
+checkify (Ann m t')  t = do let pt' = typeToPatternType t'
+                            unify t pt'
+                            pt2' <- instantiate pt'
+                            checkify m pt2'
+checkify (Lam x b)   t = do arg <- newMetaVar
+                            ret <- newMetaVar
+                            unify t (PFun arg ret)
+                            arg' <- instantiate arg
+                            ret' <- instantiate ret
+                            extend [PHasType x arg']
+                                 $ checkify b ret'
+checkify (App f a)   t = do PFun arg ret <- inferify f
+                            unify ret t
+                            arg' <- instantiate arg
+                            checkify a arg'
+checkify (Con c as)  t = do t' <- inferify (Con c as)
+                            unify t t'
+checkify (Case m cs) t = do t' <- inferify m
+                            checkifyClauses t' cs t
 
 checkifyPattern :: Pattern -> PatternType -> TypeChecker PatternContext
-checkifyPattern (VarPat x) patTy = return [PHasType x patTy]
-checkifyPattern (ConPat c ps) patTy
-  = do sig <- signature
-       case lookupSignature c sig of
-         Nothing -> failure
-         Just (ConSig args ret) -> do
-           guard $ length ps == length args
-           unify patTy (typeToPatternType ret)
-           rss <- sequence $ zipWith (\p patTy' -> checkifyPattern p (typeToPatternType patTy')) ps args
-           return $ concat rss
+checkifyPattern patTy t = do ctx <- go patTy t
+                             let names = map name ctx
+                             guard $ length names == length (nub names)
+                             return ctx
+  where
+    go (VarPat x)    t = return [PHasType x t]
+    go (ConPat c ps) t = do ConSig args ret <- typeInSignature c
+                            guard $ length ps == length args
+                            unify t (typeToPatternType ret)
+                            rss <- sequence $ zipWith go ps (map typeToPatternType args)
+                            return $ concat rss
 
 
 checkifyClauses :: PatternType -> [Clause] -> PatternType -> TypeChecker ()
-checkifyClauses patTy [] ty = return ()
-checkifyClauses patTy (Clause pat body:cs) ty
-  = do ctx' <- checkifyPattern pat patTy
-       extend ctx' (checkify body ty)
-       checkifyClauses patTy cs ty
+checkifyClauses patTy [] t = return ()
+checkifyClauses patTy (Clause p b:cs) t = do ctx' <- checkifyPattern p patTy
+                                             ctx <- context
+                                             extend ctx'
+                                                  $ checkify b t
+                                             checkifyClauses patTy cs t
 
-
-checkify :: Term -> PatternType -> TypeChecker ()
-checkify (Var n)     ty = hasTypeInContext n ty
-checkify (Ann m ty') ty = do let tyP' = typeToPatternType ty'
-                             unify tyP' ty
-                             checkify m tyP'
-checkify (Lam x m)   ty = do a <- newMetaVar
-                             b <- newMetaVar
-                             unify ty (PFun a b)
-                             a' <- instantiate a
-                             b' <- instantiate b
-                             extend [PHasType x a'] (checkify m b')
-checkify (App f x)   ty = do a <- newMetaVar
-                             checkify f (PFun a ty)
-                             a' <- instantiate a
-                             checkify x a'
-checkify (Con c as)  ty = checkifyConData c as ty
-checkify (Case m cs) ty = do ty' <- newMetaVar
-                             checkify m ty'
-                             ty2' <- instantiate ty'
-                             checkifyClauses ty2' cs ty
 
 
 -- type checking succees exactly when checkification succeeds
@@ -307,11 +340,10 @@ metasSolved = do (_,_,nextMeta,subs) <- get
                  guard $ nextMeta == M.size subs
 
 check :: Term -> PatternType -> TypeChecker ()
-check m ty = do checkify m ty
-                metasSolved
+check m t = do checkify m t
+               metasSolved
                 
 infer :: Term -> TypeChecker PatternType
-infer m = do ty <- newMetaVar
-             checkify m ty
+infer m = do t <- inferify m
              metasSolved
-             instantiate ty
+             instantiate t
