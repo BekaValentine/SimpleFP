@@ -122,8 +122,7 @@ infer (Var x)     = typeInContext x
 infer (Ann m t)   = check m t >> return t
 infer (Lam x b)   = failure
 infer (App f a)   = do Fun arg ret <- infer f
-                       arg' <- infer a
-                       guard (arg == arg')
+                       check a arg
                        return ret
 infer (Con c as)  = do ConSig args ret <- typeInSignature c
                        guard $ length as == length args
