@@ -19,6 +19,9 @@ library
   exposed-modules:     Basic.Elaboration,
                        Basic.REPL,
                        Basic.TypeChecking,
+                       Constraint.Elaboration,
+                       Constraint.REPL,
+                       Constraint.TypeChecking,
                        Core.Evaluation,
                        Core.Parser,
                        Core.Program,
@@ -30,6 +33,7 @@ library
   -- other-modules:       
   other-extensions:    RecursiveDo
   build-depends:       base >=4.7 && <4.8,
+                       containers,
                        parsec,
                        transformers
   hs-source-dirs:      src
