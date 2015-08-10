@@ -159,9 +159,8 @@ check (Ann m t')  t = do guard $ t == t'
                          check m t'
 check (Lam x b)   t = case t of
                         Fun arg ret
-                          -> do ctx <- context
-                                extend [HasType x arg]
-                                     $ check b ret
+                          -> extend [HasType x arg]
+                                  $ check b ret
                         _ -> failure
 check (App f a)   t = do Fun arg ret <- infer f
                          guard $ ret == t
