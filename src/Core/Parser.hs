@@ -163,7 +163,7 @@ annLeft :: GenParser Char st Term
 annLeft = tryMulti [parenTerm,conData,application] variable
 
 lamBody :: GenParser Char st Term
-lamBody = tryMulti [parenTerm,lambda,conData,caseExp,{-annotation,-}application] variable
+lamBody = tryMulti [annotation,parenTerm,lambda,conData,caseExp,application] variable
 
 appFun :: GenParser Char st Term
 appFun = tryMulti [parenTerm] variable
@@ -172,13 +172,13 @@ appArg :: GenParser Char st Term
 appArg = tryMulti [parenTerm,noArgConData] variable
 
 conArg :: GenParser Char st Term
-conArg = tryMulti [parenTerm,lambda,noArgConData,caseExp,{-annotation,-}application] variable
+conArg = tryMulti [annotation,parenTerm,lambda,noArgConData,caseExp,application] variable
 
 caseArg :: GenParser Char st Term
-caseArg = tryMulti [parenTerm,lambda,conData,{-annotation,-}application] variable
+caseArg = tryMulti [annotation,parenTerm,lambda,conData,application] variable
 
 term :: GenParser Char st Term
-term = tryMulti [parenTerm,lambda,conData,caseExp,{-annotation,-}application] variable
+term = tryMulti [annotation,parenTerm,lambda,conData,caseExp,application] variable
 
 parseTerm :: String -> Either String Term
 parseTerm str = case parse (spaces *> term <* eof) "(unknown)" str of
