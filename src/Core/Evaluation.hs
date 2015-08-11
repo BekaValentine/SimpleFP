@@ -59,6 +59,7 @@ eval :: Env -> Term -> Either String Value
 eval env (Var x)        = case lookupEnv x env of
                             Nothing -> Left ("Unbound variable: " ++ x ++ "\nEnvironment: " ++ show env)
                             Just m  -> return m
+eval env (Ann m _)      = eval env m
 eval env (Lam x b)      = return $ Clo env x b
 eval env (App f a)      = do ef <- eval env f
                              ea <- eval env a
