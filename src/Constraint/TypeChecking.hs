@@ -4,7 +4,8 @@ module Constraint.TypeChecking where
 
 import System.IO.Unsafe
 
-import Control.Monad (guard)
+import Control.Applicative ((<$>))
+import Control.Monad (guard,forM)
 import Control.Monad.Trans.State
 import Data.List (intercalate,nub)
 import qualified Data.Map as M
@@ -192,17 +193,30 @@ solve eqs = go eqs M.empty
 
 addSubstitutions :: Substitution -> TypeChecker ()
 addSubstitutions subs'
-  = do subs <- substitution
-       let subs2 = M.union subs' subs
-           subs2' = M.map (substitute subs2) subs2
-       putSubstitution subs2'
+  = do completeSubstitution subs'
+       substituteContext
   where
+    
+    completeSubstitution subs'
+      = do subs <- substitution
+           let subs2 = M.union subs' subs
+               subs2' = M.map (substitute subs2) subs2
+           putSubstitution subs2'
+    
     substitute :: Substitution -> PatternType -> PatternType
     substitute s (PTyCon tycon) = PTyCon tycon
     substitute s (PFun a b)     = PFun (substitute s a) (substitute s b)
     substitute s (PMeta i)      = case M.lookup i s of
                                     Nothing -> PMeta i
                                     Just t  -> substitute s t
+    
+    substituteContext
+      = do ctx <- context
+           ctx' <- forM ctx $ \d ->
+                     case d of
+                       PHasType x t  -> PHasType x <$> instantiate t
+                       PHasDef x v t -> PHasDef x v <$> instantiate t
+           putContext ctx'
 
 
 unify :: PatternType -> PatternType -> TypeChecker ()
@@ -253,7 +267,11 @@ inferify (Var x)     = typeInContext x
 inferify (Ann m t)   = do let pt = typeToPatternType t
                           checkify m pt
                           return pt
-inferify (Lam x b)   = failure
+inferify (Lam x b)   = do arg <- newMetaVar
+                          ret <- extend [PHasType x arg]
+                                      $ inferify b
+                          arg' <- instantiate arg
+                          return $ PFun arg ret
 inferify (App f a)   = do PFun arg ret <- inferify f
                           checkify a arg
                           return ret
