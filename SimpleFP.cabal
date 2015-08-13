@@ -29,7 +29,13 @@ library
                        Core.Type,
                        Monadic.Elaboration,
                        Monadic.REPL,
-                       Monadic.TypeChecking
+                       Monadic.TypeChecking,
+                       Poly.Evaluation,
+                       Poly.Parser,
+                       Poly.Program,
+                       Poly.RawTerm,
+                       Poly.Term,
+                       Poly.Type
   -- other-modules:       
   other-extensions:    RecursiveDo
   build-depends:       base >=4.7 && <4.8,
