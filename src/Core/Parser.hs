@@ -31,6 +31,24 @@ reserved :: [String]
 reserved = ["data", "case", "of", "end", "where"]
 
 
+-- names
+
+varName :: GenParser Char st String
+varName = do res <- tok $ do c <- lower
+                             cs <- many (try alphaNum <|> char '_')
+                             primes <- many (char '\'')
+                             return (c:cs ++ primes)
+             guard $ notElem res reserved
+             return $ res
+
+decName :: GenParser Char st String
+decName = do res <- tok $ do c <- upper
+                             cs <- many (try alphaNum <|> char '_')
+                             primes <- many (char '\'')
+                             return (c:cs ++ primes)
+             guard $ notElem res reserved
+             return $ res
+
 
 -- type parsers
 
@@ -61,22 +79,6 @@ datatype = tryMulti [funType,typeCon] parenType
 
 
 -- term parsers
-
-varName :: GenParser Char st String
-varName = do res <- tok $ do c <- lower
-                             cs <- many (try alphaNum <|> char '_')
-                             primes <- many (char '\'')
-                             return (c:cs ++ primes)
-             guard $ notElem res reserved
-             return $ res
-
-decName :: GenParser Char st String
-decName = do res <- tok $ do c <- upper
-                             cs <- many (try alphaNum <|> char '_')
-                             primes <- many (char '\'')
-                             return (c:cs ++ primes)
-             guard $ notElem res reserved
-             return $ res
 
 variable :: GenParser Char st Term
 variable = do x <- varName
