@@ -52,8 +52,17 @@ decName = do res <- tok $ do c <- upper
 
 -- type parsers
 
+noArgTyCon :: GenParser Char st Type
+noArgTyCon = do c <- decName
+                return $ TyCon c []
+
+argTyCon :: GenParser Char st Type
+argTyCon = do c <- decName
+              ts <- many1 tyConArg
+              return $ TyCon c ts
+
 typeCon :: GenParser Char st Type
-typeCon = TyCon <$> decName
+typeCon = try argTyCon <|> noArgTyCon
 
 funType :: GenParser Char st Type
 funType = do arg <- funLeft
@@ -76,6 +85,9 @@ parenType = between
               (symbol "(")
               (symbol ")")
               datatype
+
+tyConArg :: GenParser Char st Type
+tyConArg = tryMulti [parenType,noArgTyCon] typeVar
 
 funLeft :: GenParser Char st Type
 funLeft = tryMulti [parenType,typeCon] typeVar
@@ -219,7 +231,7 @@ noArgAlternative = do c <- decName
 
 argAlternative :: GenParser Char st (String,[Type])
 argAlternative = do c <- decName
-                    as <- many1 argAlternativeArg --datatype
+                    as <- many1 argAlternativeArg
                     return $ (c,as)
 
 argAlternativeArg :: GenParser Char st Type
@@ -228,19 +240,24 @@ argAlternativeArg = try parenType <|> typeCon
 alternative :: GenParser Char st (String,[Type])
 alternative = try argAlternative <|> noArgAlternative
 
+tyconPart :: GenParser Char st (String,[String])
+tyconPart = do tycon <- decName
+               params <- many varName
+               return (tycon,params)
+
 emptyTypeDecl :: GenParser Char st TypeDeclaration
 emptyTypeDecl = do _ <- symbol "data"
-                   tycon <- decName
+                   (tycon,params) <- tyconPart
                    _ <- symbol "end"
-                   return $ TypeDeclaration tycon []
+                   return $ TypeDeclaration tycon params []
 
 nonEmptyTypeDecl :: GenParser Char st TypeDeclaration
 nonEmptyTypeDecl = do _ <- symbol "data"
-                      tycon <- decName
+                      (tycon,params) <- tyconPart
                       _ <- symbol "="
                       alts <- alternative `sepBy` symbol "|"
                       _ <- symbol "end"
-                      return $ TypeDeclaration tycon alts
+                      return $ TypeDeclaration tycon params alts
 
 typeDecl :: GenParser Char st TypeDeclaration
 typeDecl = try nonEmptyTypeDecl

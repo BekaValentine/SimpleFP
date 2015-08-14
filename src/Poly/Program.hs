@@ -21,13 +21,13 @@ instance Show TermDeclaration where
 -- Type Declarations
 
 data TypeDeclaration
-  = TypeDeclaration String [(String,[Type])]
+  = TypeDeclaration String [String] [(String,[Type])]
 
 instance Show TypeDeclaration where
-  show (TypeDeclaration tycon [])
-    = "data " ++ tycon ++ " end"
-  show (TypeDeclaration tycon alts)
-    = "data " ++ tycon ++ " = "
+  show (TypeDeclaration tycon params [])
+    = "data " ++ tycon ++ concat (map (' ':) params) ++ " end"
+  show (TypeDeclaration tycon params alts)
+    = "data " ++ tycon ++ concat (map (' ':) params) ++ " = "
    ++ intercalate " | " [ showAlt c as | (c,as) <- alts ]
    ++ " end"
    where
