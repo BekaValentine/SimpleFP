@@ -186,7 +186,7 @@ appArg :: GenParser Char st Term
 appArg = tryMulti [parenTerm,noArgConData] variable
 
 conArg :: GenParser Char st Term
-conArg = tryMulti [annotation,parenTerm,lambda,noArgConData,caseExp,application] variable
+conArg = tryMulti [parenTerm,noArgConData] variable
 
 caseArg :: GenParser Char st Term
 caseArg = tryMulti [annotation,parenTerm,lambda,conData,application] variable
