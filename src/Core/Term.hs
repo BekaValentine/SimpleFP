@@ -21,12 +21,12 @@ instance Show Term where
       aux loc t
         = let (locs, str) = case t of
                 Var x     -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg], x)
-                Ann m t   -> ([RootTerm,LamBody,ConArg,CaseArg], aux AnnLeft m ++ " : " ++ show t)
-                Lam x b   -> ([RootTerm,LamBody,ConArg,CaseArg], "\\" ++ x ++ " -> " ++ aux LamBody b)
-                App f a   -> ([RootTerm,AnnLeft,LamBody,AppLeft,ConArg,CaseArg], aux AppLeft f ++ " " ++ aux AppRight a)
+                Ann m t   -> ([RootTerm,LamBody,CaseArg], aux AnnLeft m ++ " : " ++ show t)
+                Lam x b   -> ([RootTerm,LamBody,CaseArg], "\\" ++ x ++ " -> " ++ aux LamBody b)
+                App f a   -> ([RootTerm,AnnLeft,LamBody,AppLeft,CaseArg], aux AppLeft f ++ " " ++ aux AppRight a)
                 Con c []  -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg], c)
                 Con c as  -> ([RootTerm,AnnLeft,LamBody,CaseArg], c ++ " " ++ intercalate " " (map (aux ConArg) as))
-                Case m cs -> ([RootTerm,LamBody,ConArg], "case " ++ aux CaseArg m ++ " of " ++ intercalate " | " (map show cs) ++ " end")
+                Case m cs -> ([RootTerm,LamBody], "case " ++ aux CaseArg m ++ " of " ++ intercalate " | " (map show cs) ++ " end")
           in if loc `elem` locs
              then str
              else "(" ++ str ++ ")"
