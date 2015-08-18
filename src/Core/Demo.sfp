@@ -1,32 +1,9 @@
-data Bool
-   = True
-   | False
-end
+data Nat = Zero | Suc Nat end
 
-
-let not : Bool -> Bool
-  = \b -> case b of
-          | True -> False
-          | False -> True
-          end
-end
-
-
-data Nat
-   = Zero
-   | Suc Nat
-end
-
-
-let even : Nat -> Bool
-  = \n -> case n of
-          | Zero -> True
-          | Suc Zero -> False
-          | Suc (Suc n') -> even n'
-          end
-end
-
-
-let odd : Nat -> Bool
-  = \n -> not (even n)
+let plus : Nat -> Nat -> Nat
+  = \x -> \y ->
+    case x of
+    | Zero -> y
+    | Suc x2 -> Suc (plus x2 y)
+    end
 end
