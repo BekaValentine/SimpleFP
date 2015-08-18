@@ -33,7 +33,6 @@ library
                        Poly.Evaluation,
                        Poly.Parser,
                        Poly.Program,
-                       Poly.RawTerm,
                        Poly.Term,
                        Poly.Type
   -- other-modules:       
