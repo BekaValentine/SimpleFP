@@ -19,9 +19,8 @@ lookupEnv = lookup
 data Value
   = Clo Env String Term
   | ConVal String [Value]
-  | TyClo Env String Term
 
-data ValueParenLoc = RootValue | CloBody | ConValArg | TyCloBody
+data ValueParenLoc = RootValue | CloBody | ConValArg
   deriving (Eq)
 
 instance Show Value where
@@ -29,10 +28,9 @@ instance Show Value where
     where
       aux c t
         = let (cs,str) = case t of
-                Clo _ x b   -> ([RootValue,CloBody,TyCloBody], "\\" ++ x ++ " -> " ++ show b)
-                ConVal c [] -> ([RootValue,CloBody,ConValArg,TyCloBody], c)
-                ConVal c as -> ([RootValue,CloBody,TyCloBody], c ++ " " ++ intercalate " " (map (aux ConValArg) as))
-                TyClo _ x b -> ([RootValue,CloBody,TyCloBody], "/\\" ++ x ++ " -> " ++ show b)
+                Clo _ x b   -> ([RootValue,CloBody], "\\" ++ x ++ " -> " ++ show b)
+                ConVal c [] -> ([RootValue,CloBody,ConValArg], c)
+                ConVal c as -> ([RootValue,CloBody], c ++ " " ++ intercalate " " (map (aux ConValArg) as))
           in if c `elem` cs
              then str
              else "(" ++ str ++ ")"
@@ -74,8 +72,3 @@ eval env (Case m cs)    = do em <- eval env m
                              case matchClauses cs em of
                                Nothing        -> Left $ "Incomplete pattern match: " ++ show (Case m cs)
                                Just (env', b) -> eval (env'++env) b
-eval env (TyLam x b)    = return $ TyClo env x b
-eval env (TyApp f a)    = do ef <- eval env f
-                             case ef of
-                               TyClo env' x b -> eval env' b
-                               f'             -> Left $ "Cannot type-apply a non-type-function: " ++ show f'
