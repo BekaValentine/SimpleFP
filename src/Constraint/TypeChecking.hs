@@ -317,8 +317,8 @@ checkify (Lam x b)   t = do arg <- newMetaVar
                             ret' <- instantiate ret
                             extend [PHasType x arg']
                                  $ checkify b ret'
-checkify (App f a)   t = do PFun arg ret <- inferify f
-                            unify ret t
+checkify (App f a)   t = do arg <- newMetaVar
+                            checkify f (PFun arg t)
                             arg' <- instantiate arg
                             checkify a arg'
 checkify (Con c as)  t = do t' <- inferify (Con c as)
