@@ -11,14 +11,11 @@ data Term
   | App Term Term
   | Con String [Term]
   | Case Term [Clause]
-  | TyLam String Term
-  | TyApp Term Term
 
 data TermParenLoc
   = RootTerm | AnnLeft
   | LamBody | AppLeft | AppRight
   | ConArg | CaseArg
-  | TyLamBody | TyAppLeft | TyAppRight
   deriving (Eq)
 
 instance Show Term where
@@ -26,15 +23,13 @@ instance Show Term where
     where
       aux loc t
         = let (locs, str) = case t of
-                Var x     -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg,TyLamBody], x)
-                Ann m t   -> ([RootTerm,LamBody,CaseArg,TyLamBody], aux AnnLeft m ++ " : " ++ show t)
-                Lam x b   -> ([RootTerm,LamBody,CaseArg,TyLamBody], "\\" ++ x ++ " -> " ++ aux LamBody b)
-                App f a   -> ([RootTerm,AnnLeft,LamBody,AppLeft,CaseArg,TyLamBody], aux AppLeft f ++ " " ++ aux AppRight a)
-                Con c []  -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg,TyLamBody], c)
-                Con c as  -> ([RootTerm,AnnLeft,LamBody,CaseArg,TyLamBody], c ++ " " ++ intercalate " " (map (aux ConArg) as))
-                Case m cs -> ([RootTerm,LamBody,TyLamBody], "case " ++ aux CaseArg m ++ " of " ++ intercalate " | " (map show cs) ++ " end")
-                TyLam x b -> ([RootTerm,LamBody,CaseArg,TyLamBody], "/\\" ++ x ++ " -> " ++ aux TyLamBody b)
-                TyApp f a -> ([RootTerm,AnnLeft,LamBody,AppLeft,CaseArg,TyLamBody], aux TyAppLeft f ++ " " ++ aux TyAppRight a)
+                Var x     -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg], x)
+                Ann m t   -> ([RootTerm,LamBody,CaseArg], aux AnnLeft m ++ " : " ++ show t)
+                Lam x b   -> ([RootTerm,LamBody,CaseArg], "\\" ++ x ++ " -> " ++ aux LamBody b)
+                App f a   -> ([RootTerm,AnnLeft,LamBody,AppLeft,CaseArg], aux AppLeft f ++ " " ++ aux AppRight a)
+                Con c []  -> ([RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg], c)
+                Con c as  -> ([RootTerm,AnnLeft,LamBody,CaseArg], c ++ " " ++ intercalate " " (map (aux ConArg) as))
+                Case m cs -> ([RootTerm,LamBody], "case " ++ aux CaseArg m ++ " of " ++ intercalate " | " (map show cs) ++ " end")
           in if loc `elem` locs
              then str
              else "(" ++ str ++ ")"
