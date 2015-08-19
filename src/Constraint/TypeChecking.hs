@@ -276,9 +276,18 @@ inferify (App f a)   = do PFun arg ret <- inferify f
                           checkify a arg
                           return ret
 inferify (Con c as)  = do ConSig args ret <- typeInSignature c
-                          guard $ length as == length args
-                          sequence_ (zipWith checkify as (map typeToPatternType args))
-                          return (typeToPatternType ret)
+                          let args' = map typeToPatternType args
+                              ret' = typeToPatternType ret
+                          guard $ length as == length args'
+                          checkifyMulti as args'
+                          return ret'
+  where
+    checkifyMulti :: [Term] -> [PatternType] -> TypeChecker ()
+    checkifyMulti []     []     = return ()
+    checkifyMulti (m:ms) (t:ts) = do t' <- instantiate t
+                                     checkify m t'
+                                     checkifyMulti ms ts
+    checkifyMulti _      _      = failure
 inferify (Case m cs) = do t <- inferify m
                           t' <- inferifyClauses t cs
                           return t'
@@ -334,10 +343,19 @@ checkifyPattern patTy t = do ctx <- go patTy t
   where
     go (VarPat x)    t = return [PHasType x t]
     go (ConPat c ps) t = do ConSig args ret <- typeInSignature c
-                            guard $ length ps == length args
-                            unify t (typeToPatternType ret)
-                            rss <- sequence $ zipWith go ps (map typeToPatternType args)
+                            let args' = map typeToPatternType args
+                                ret' = typeToPatternType ret
+                            guard $ length ps == length args'
+                            unify t ret'
+                            rss <- goMulti ps args'
                             return $ concat rss
+    
+    goMulti []     []     = return []
+    goMulti (p:ps) (t:ts) = do t' <- instantiate t
+                               ctx <- go p t
+                               ctxs <- goMulti ps ts
+                               return (ctx:ctxs)
+    goMulti _      _      = failure
 
 
 checkifyClauses :: PatternType -> [Clause] -> PatternType -> TypeChecker ()
