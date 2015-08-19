@@ -34,7 +34,10 @@ library
                        Poly.Parser,
                        Poly.Program,
                        Poly.Term,
-                       Poly.Type
+                       Poly.Type,
+                       PolyConstraint.Elaboration,
+                       PolyConstraint.REPL,
+                       PolyConstraint.TypeChecking
   -- other-modules:       
   other-extensions:    RecursiveDo
   build-depends:       base >=4.7 && <4.8,
