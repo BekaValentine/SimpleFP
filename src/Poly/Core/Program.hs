@@ -1,9 +1,9 @@
-module Poly.Program where
+module Poly.Core.Program where
 
 import Data.List (intercalate)
 
-import Poly.Term
-import Poly.Type
+import Poly.Core.Term
+import Poly.Core.Type
 
 
 

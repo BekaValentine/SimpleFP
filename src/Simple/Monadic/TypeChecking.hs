@@ -1,14 +1,14 @@
 {-# LANGUAGE RecursiveDo #-}
 
-module Monadic.TypeChecking where
+module Simple.Monadic.TypeChecking where
 
 import Control.Monad (guard)
 import Control.Monad.Trans.Reader
 import Data.List (intercalate,nub)
 
-import Core.Term
-import Core.Type
-import Core.Evaluation
+import Simple.Core.Term
+import Simple.Core.Type
+import Simple.Core.Evaluation
 
 
 

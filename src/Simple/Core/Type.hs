@@ -1,4 +1,4 @@
-module Core.Type where
+module Simple.Core.Type where
 
 data Type
   = TyCon String

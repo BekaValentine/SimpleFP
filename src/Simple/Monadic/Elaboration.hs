@@ -1,15 +1,15 @@
-module Monadic.Elaboration where
+module Simple.Monadic.Elaboration where
 
 import Control.Monad (when,unless)
 import Control.Monad.Trans.State
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 
-import Core.Term
-import Core.Type
-import Core.Program
+import Simple.Core.Term
+import Simple.Core.Type
+import Simple.Core.Program
 
-import Monadic.TypeChecking hiding (signature,context)
+import Simple.Monadic.TypeChecking hiding (signature,context)
 
 
 type Elaborator a = StateT (Signature,Context) (Either String) a

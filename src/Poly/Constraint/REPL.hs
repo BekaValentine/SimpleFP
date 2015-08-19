@@ -1,11 +1,11 @@
-module Basic.REPL where
+module Poly.Constraint.REPL where
 
 import System.IO
 
-import Basic.Elaboration
-import Basic.TypeChecking
-import Core.Evaluation
-import Core.Parser
+import Poly.Constraint.Elaboration
+import Poly.Constraint.TypeChecking
+import Poly.Core.Evaluation
+import Poly.Core.Parser
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
@@ -32,14 +32,14 @@ repl src = case loadProgram src of
     loadProgram :: String -> Either String (Signature,Context,Env)
     loadProgram src
       = do prog <- parseProgram src
-           (sig,ctx) <- elabProgram prog
+           (sig,ctx) <- runElaborator (elabProgram prog)
            env <- contextToEnv ctx
            return (sig,ctx,env)
     
     loadTerm :: Signature -> Context -> Env -> String -> Either String Value
     loadTerm sig ctx env src
       = do tm <- parseTerm src
-           case infer sig ctx tm of
+           case runTypeChecker (infer tm) sig (contextToPatternContext ctx) of
              Nothing -> Left "Unable to infer type."
              Just _ -> eval env tm
     

@@ -1,9 +1,9 @@
-module Core.Program where
+module Simple.Core.Program where
 
 import Data.List (intercalate)
 
-import Core.Term
-import Core.Type
+import Simple.Core.Term
+import Simple.Core.Type
 
 
 

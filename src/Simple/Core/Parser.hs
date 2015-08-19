@@ -1,4 +1,4 @@
-module Core.Parser where
+module Simple.Core.Parser where
 
 import Control.Applicative ((<$>),(*>),(<*))
 import Control.Monad (guard)
@@ -6,9 +6,9 @@ import Data.List (foldl')
 import Text.Parsec
 import qualified Text.Parsec.Token as Token
 
-import Core.Term
-import Core.Type
-import Core.Program
+import Simple.Core.Term
+import Simple.Core.Type
+import Simple.Core.Program
 
 
 

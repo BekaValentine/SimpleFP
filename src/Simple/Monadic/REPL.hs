@@ -1,11 +1,11 @@
-module PolyConstraint.REPL where
+module Simple.Monadic.REPL where
 
 import System.IO
 
-import PolyConstraint.Elaboration
-import PolyConstraint.TypeChecking
-import Poly.Evaluation
-import Poly.Parser
+import Simple.Monadic.Elaboration
+import Simple.Monadic.TypeChecking
+import Simple.Core.Evaluation
+import Simple.Core.Parser
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
@@ -39,7 +39,7 @@ repl src = case loadProgram src of
     loadTerm :: Signature -> Context -> Env -> String -> Either String Value
     loadTerm sig ctx env src
       = do tm <- parseTerm src
-           case runTypeChecker (infer tm) sig (contextToPatternContext ctx) of
+           case runTypeChecker (infer tm) sig ctx of
              Nothing -> Left "Unable to infer type."
              Just _ -> eval env tm
     

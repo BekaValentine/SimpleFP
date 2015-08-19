@@ -1,6 +1,6 @@
 {-# LANGUAGE RecursiveDo #-}
 
-module Constraint.TypeChecking where
+module Simple.Constraint.TypeChecking where
 
 import System.IO.Unsafe
 
@@ -11,9 +11,9 @@ import Data.List (intercalate,nub)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe,fromJust)
 
-import Core.Term
-import Core.Type
-import Core.Evaluation
+import Simple.Core.Term
+import Simple.Core.Type
+import Simple.Core.Evaluation
 
 
 

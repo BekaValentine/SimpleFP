@@ -1,4 +1,4 @@
-module Poly.Type where
+module Poly.Core.Type where
 
 import Data.List (intercalate)
 

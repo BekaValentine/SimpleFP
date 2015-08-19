@@ -1,8 +1,8 @@
-module Poly.Evaluation where
+module Poly.Core.Evaluation where
 
 import Data.List (intercalate)
 
-import Poly.Term
+import Poly.Core.Term
 
 
 -- Evaluation Environments

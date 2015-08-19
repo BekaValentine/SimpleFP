@@ -1,8 +1,8 @@
-module Core.Term where
+module Poly.Core.Term where
 
 import Data.List (intercalate)
 
-import Core.Type
+import Poly.Core.Type
 
 data Term
   = Var String
@@ -12,7 +12,10 @@ data Term
   | Con String [Term]
   | Case Term [Clause]
 
-data TermParenLoc = RootTerm | AnnLeft | LamBody | AppLeft | AppRight | ConArg | CaseArg
+data TermParenLoc
+  = RootTerm | AnnLeft
+  | LamBody | AppLeft | AppRight
+  | ConArg | CaseArg
   deriving (Eq)
 
 instance Show Term where

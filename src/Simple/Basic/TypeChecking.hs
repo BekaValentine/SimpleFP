@@ -1,13 +1,13 @@
 {-# LANGUAGE RecursiveDo #-}
 
-module Basic.TypeChecking where
+module Simple.Basic.TypeChecking where
 
 import Control.Monad (guard)
 import Data.List (intercalate,nub)
 
-import Core.Term
-import Core.Type
-import Core.Evaluation
+import Simple.Core.Term
+import Simple.Core.Type
+import Simple.Core.Evaluation
 
 
 

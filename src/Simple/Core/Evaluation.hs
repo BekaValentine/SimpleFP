@@ -1,8 +1,8 @@
-module Core.Evaluation where
+module Simple.Core.Evaluation where
 
 import Data.List (intercalate)
 
-import Core.Term
+import Simple.Core.Term
 
 
 -- Evaluation Environments

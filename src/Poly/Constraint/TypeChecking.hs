@@ -1,7 +1,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS -Wall #-}
 
-module PolyConstraint.TypeChecking where
+module Poly.Constraint.TypeChecking where
 
 import System.IO.Unsafe
 
@@ -12,9 +12,9 @@ import Data.List (intercalate,nub)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
 
-import Poly.Term
-import Poly.Type
-import Poly.Evaluation
+import Poly.Core.Term
+import Poly.Core.Type
+import Poly.Core.Evaluation
 
 
 

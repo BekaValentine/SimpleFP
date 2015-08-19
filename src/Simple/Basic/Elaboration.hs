@@ -1,14 +1,14 @@
-module Basic.Elaboration where
+module Simple.Basic.Elaboration where
 
 import Control.Monad (when,unless)
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 
-import Core.Term
-import Core.Type
-import Core.Program
+import Simple.Core.Term
+import Simple.Core.Type
+import Simple.Core.Program
 
-import Basic.TypeChecking
+import Simple.Basic.TypeChecking
 
 
 elabTermDecl :: Signature -> Context -> TermDeclaration -> Either String Context
