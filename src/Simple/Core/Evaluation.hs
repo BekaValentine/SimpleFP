@@ -56,19 +56,19 @@ matchClauses (Clause p b:cs) v = case match p v of
 -- Standard Eager Evaluation
 
 eval :: Env -> Term -> Either String Value
-eval env (Var x)        = case lookupEnv x env of
-                            Nothing -> Left ("Unbound variable: " ++ x ++ "\nEnvironment: " ++ show env)
-                            Just m  -> return m
-eval env (Ann m _)      = eval env m
-eval env (Lam x b)      = return $ Clo env x b
-eval env (App f a)      = do ef <- eval env f
-                             ea <- eval env a
-                             case (ef, ea) of
-                               (Clo env' x b, a') -> eval ((x,a'):env') b
-                               (f',_)             -> Left $ "Cannot apply a non-function: " ++ show f'
-eval env (Con c as)     = do eas <- sequence (map (eval env) as)
-                             return $ ConVal c eas
-eval env (Case m cs)    = do em <- eval env m
-                             case matchClauses cs em of
-                               Nothing        -> Left $ "Incomplete pattern match: " ++ show (Case m cs)
-                               Just (env', b) -> eval (env'++env) b
+eval env (Var x)     = case lookupEnv x env of
+                         Nothing -> Left ("Unbound variable: " ++ x ++ "\nEnvironment: " ++ show env)
+                         Just m  -> return m
+eval env (Ann m _)   = eval env m
+eval env (Lam x b)   = return $ Clo env x b
+eval env (App f a)   = do ef <- eval env f
+                          ea <- eval env a
+                          case (ef, ea) of
+                            (Clo env' x b, a') -> eval ((x,a'):env') b
+                            (f',_)             -> Left $ "Cannot apply a non-function: " ++ show f'
+eval env (Con c as)  = do eas <- sequence (map (eval env) as)
+                          return $ ConVal c eas
+eval env (Case m cs) = do em <- eval env m
+                          case matchClauses cs em of
+                            Nothing        -> Left $ "Incomplete pattern match: " ++ show (Case m cs)
+                            Just (env', b) -> eval (env'++env) b
