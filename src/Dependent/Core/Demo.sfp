@@ -1,0 +1,32 @@
+data Nat : Type where
+  | Zero : Nat
+  | Suc (n : Nat) : Nat
+end
+
+{-
+data Vec (a : Type) (n : Nat) : Type where
+  | Nil (a : Type) : Vec a Zero
+  | Cons (a : Type) (n : Nat) (x : a) (xs : Vec a n) : Vec a (Suc n)
+end
+
+let vec : (a : Type) -> (n : Nat) -> (x : a) -> Vec a n
+  = \a -> \n -> \x ->
+      case n of
+        | Zero -> Nil a
+        | Suc n' -> Cons a n' x (vec a n' x)
+      end
+end
+
+data Fin (n : Nat) : Type where
+  | FZero (n : Nat) : Fin (Suc n)
+  | FSuc (n : Nat) (f : Fin n) : Fin (Suc n)
+end
+
+let lookup : (a : Type) -> (n : Nat) -> (xs : Vec a n) -> (f : Fin n) -> a
+  = \a -> \n -> \xs -> \f ->
+      case n || xs || f of
+        | Suc n' || Cons x xs' || FZero -> x
+        | Suc n' || Cons x xs' || FSuc f' -> lookup a n' xs' f'
+      end
+end
+-}

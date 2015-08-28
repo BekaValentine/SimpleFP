@@ -16,7 +16,11 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Simple.Basic.Elaboration,
+  exposed-modules:     Dependent.Core.Evaluation,
+                       Dependent.Core.Program,
+                       Dependent.Core.Parser,
+                       Dependent.Core.Term,
+                       Simple.Basic.Elaboration,
                        Simple.Basic.REPL,
                        Simple.Basic.TypeChecking,
                        Simple.Constraint.Elaboration,
