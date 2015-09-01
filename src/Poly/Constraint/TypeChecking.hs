@@ -19,10 +19,6 @@ import Poly.Core.Evaluation
 
 
 
-rawPatternToPattern :: Pattern -> Pattern
-rawPatternToPattern (VarPat x) = VarPat x
-rawPatternToPattern (ConPat c as) = ConPat c (map rawPatternToPattern as)
-
 freshen :: [String] -> String -> String
 freshen xs x
   | x `elem` xs = freshen xs (x ++ "'")
