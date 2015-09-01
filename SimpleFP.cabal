@@ -19,6 +19,7 @@ library
   exposed-modules:     Dependent.Core.Evaluation,
                        Dependent.Core.Program,
                        Dependent.Core.Parser,
+                       Dependent.Core.Substitution,
                        Dependent.Core.Term,
                        Simple.Basic.Elaboration,
                        Simple.Basic.REPL,
