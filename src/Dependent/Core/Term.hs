@@ -5,7 +5,8 @@ module Dependent.Core.Term where
 import Data.List (intercalate)
 
 data Term
-  = Var String
+  = Meta Int
+  | Var String
   | Ann Term Term
   | Type
   | Fun String Term Term
@@ -27,6 +28,7 @@ instance Show Term where
     where
       aux loc t
         = let (locs, str) = case t of
+                Meta i    -> ([RootTerm,AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg], "?" ++ show i)
                 Var x     -> ([RootTerm,AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg], x)
                 Ann m ty  -> ([RootTerm,FunArg,LamBody], aux AnnLeft m ++ " : " ++ show ty)
                 Type      -> ([RootTerm,AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg], "Type")
