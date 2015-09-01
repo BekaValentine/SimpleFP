@@ -1,7 +1,6 @@
 module Dependent.Core.Parser where
 
 import Control.Applicative ((<$>),(*>),(<*))
-import Control.Monad (guard)
 import Data.List (foldl')
 import Text.Parsec
 import qualified Text.Parsec.Token as Token
@@ -48,27 +47,6 @@ varName = do lookAhead lower
 decName = do lookAhead upper
              identifier
 
-
-{-
--- type parsers
-
-typeCon = TyCon <$> decName
-
-funType = do arg <- try $ do
-               arg <- funLeft
-               _ <- reservedOp "->"
-               return arg
-             ret <- funRight
-             return $ Fun arg ret
-
-parenType = parens datatype
-
-funLeft = typeCon <|> parenType
-
-funRight = funType <|> typeCon <|> parenType
-
-datatype = funType <|> typeCon <|> parenType
--}
 
 -- term parsers
 
