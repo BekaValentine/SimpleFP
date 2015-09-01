@@ -1,3 +1,5 @@
+{-# OPTIONS -Wall #-}
+
 module Dependent.Core.Program where
 
 import Data.List (intercalate)
@@ -18,11 +20,6 @@ instance Show TermDeclaration where
 
 
 -- Type Declarations
-
-newtype DeclArg = DeclArg (String,Term)
-
-instance Show DeclArg where
-  show (DeclArg (x,t)) = "(" ++ x ++ " : " ++ show t ++ ")"
 
 data TypeDeclaration
   = TypeDeclaration String [DeclArg] [(String,[DeclArg],Term)]

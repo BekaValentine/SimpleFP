@@ -4,6 +4,19 @@ module Dependent.Core.Term where
 
 import Data.List (intercalate)
 
+
+
+-- Used in multiple places
+
+newtype DeclArg = DeclArg (String,Term)
+
+instance Show DeclArg where
+  show (DeclArg (x,t)) = "(" ++ x ++ " : " ++ show t ++ ")"
+
+
+
+-- Terms
+
 data Term
   = Meta Int
   | Var String
