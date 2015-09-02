@@ -167,13 +167,13 @@ type TyVarCount = Int
 
 type MetaVar = Int
 
-type Substitution = M.Map MetaVar PatternType
+type Substitution = [(MetaVar,PatternType)]
 
 type TypeChecker a = StateT (Signature, PatternContext, TyVarCount, MetaVar, Substitution) Maybe a
 
 runTypeChecker :: TypeChecker a -> Signature -> PatternContext -> Maybe a
 runTypeChecker checker sig ctx
-  = fmap fst (runStateT checker (sig,ctx,0,0,M.empty))
+  = fmap fst (runStateT checker (sig,ctx,0,0,[]))
       
 
 failure :: TypeChecker a
@@ -225,15 +225,15 @@ occurs x (PForall _ b)   = occurs x b
 
 
 solve :: [Equation] -> Maybe Substitution
-solve eqs0 = go eqs0 M.empty
+solve eqs0 = go eqs0 []
   where
     go [] subs' = return subs'
     go (Equation (PMeta x) t2 : eqs) subs'
       = do guard (not (occurs x t2))
-           go eqs (M.insert x t2 subs')
+           go eqs ((x,t2):subs')
     go (Equation t1 (PMeta y) : eqs) subs'
       = do guard (not (occurs y t1))
-           go eqs (M.insert y t1 subs')
+           go eqs ((y,t1):subs')
     go (Equation (PTyCon tycon1 args1) (PTyCon tycon2 args2) : eqs) subs'
       = do guard $ tycon1 == tycon2 && length args1 == length args2
            go (zipWith Equation args1 args2 ++ eqs) subs'
@@ -256,14 +256,14 @@ addSubstitutions subs0
     
     completeSubstitution subs'
       = do subs <- substitution
-           let subs2 = M.union subs' subs
-               subs2' = M.map (substitute subs2) subs2
-           putSubstitution subs2'
+           let subs2 = subs' ++ subs
+               subs2' = map (\(k,v) -> (k, substitute subs2 v)) subs2
+           return subs2'
     
     substitute :: Substitution -> PatternType -> PatternType
     substitute s (PTyCon tycon args) = PTyCon tycon (map (substitute s) args)
     substitute s (PFun a b)          = PFun (substitute s a) (substitute s b)
-    substitute s (PMeta i)           = case M.lookup i s of
+    substitute s (PMeta i)           = case lookup i s of
                                          Nothing -> PMeta i
                                          Just t  -> substitute s t
     substitute _ (PTyVar x)          = PTyVar x
@@ -291,7 +291,7 @@ instantiate (PFun a b)          = do a' <- instantiate a
                                      b' <- instantiate b
                                      return $ PFun a' b'
 instantiate (PMeta x)           = do subs <- substitution
-                                     return $ fromMaybe (PMeta x) (M.lookup x subs)
+                                     return $ fromMaybe (PMeta x) (lookup x subs)
 instantiate (PTyVar x)          = return $ PTyVar x
 instantiate (PForall x b)       = do b' <- instantiate b
                                      return $ PForall x b'
@@ -530,7 +530,7 @@ checkifyClauses patTy (Clause p b:cs) t
 
 metasSolved :: TypeChecker ()
 metasSolved = do (_,_,_,nextMeta,subs) <- get
-                 guard $ nextMeta == M.size subs
+                 guard $ nextMeta == length subs
 
 check :: Term -> PatternType -> TypeChecker ()
 check m t = do checkify m t
