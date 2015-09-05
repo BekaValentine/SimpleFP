@@ -16,37 +16,13 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Dependent.Core.Evaluation,
-                       Dependent.Core.Program,
-                       Dependent.Core.Parser,
-                       Dependent.Core.Substitution,
-                       Dependent.Core.Term,
-                       Simple.Basic.Elaboration,
-                       Simple.Basic.REPL,
-                       Simple.Basic.TypeChecking,
-                       Simple.Constraint.Elaboration,
-                       Simple.Constraint.REPL,
-                       Simple.Constraint.TypeChecking,
-                       Simple.Core.Evaluation,
-                       Simple.Core.Parser,
-                       Simple.Core.Program,
-                       Simple.Core.Term,
-                       Simple.Core.Type,
-                       Simple.Monadic.Elaboration,
-                       Simple.Monadic.REPL,
-                       Simple.Monadic.TypeChecking,
-                       Poly.Core.Evaluation,
-                       Poly.Core.Parser,
-                       Poly.Core.Program,
-                       Poly.Core.Term,
-                       Poly.Core.Type,
-                       Poly.Constraint.Elaboration,
-                       Poly.Constraint.REPL,
-                       Poly.Constraint.TypeChecking
+  exposed-modules:     Simple.Monadic.REPL
+                       
   -- other-modules:       
   other-extensions:    RecursiveDo
   build-depends:       base >=4.7 && <4.8,
                        containers,
+                       mtl,
                        parsec,
                        transformers
   hs-source-dirs:      src

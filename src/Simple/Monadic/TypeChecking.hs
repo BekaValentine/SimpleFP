@@ -2,10 +2,13 @@
 
 module Simple.Monadic.TypeChecking where
 
+import Control.Applicative ((<$>))
 import Control.Monad (guard)
-import Control.Monad.Trans.Reader
-import Data.List (intercalate,nub)
+import Control.Monad.State
+import Data.List (intercalate,nub,find)
 
+import Env
+import Eval
 import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Evaluation
@@ -34,56 +37,69 @@ instance Show Signature where
 
 
 
+-- Definitions
+
+type Definitions = [(String,Term,Type)]
+
+definitionsToEnvironment :: Definitions -> Environment Term
+definitionsToEnvironment defs
+  = [ (x,m) | (x,m,_) <- defs ]
+
+
+
+
 -- Contexts
 
-data Declaration
-  = HasType String Type
-  | HasDef String Term Type
-
-instance Show Declaration where
-  show (HasType x t)  = x ++ " : " ++ show t
-  show (HasDef x v t) = x ++ " = " ++ show v ++ " : " ++ show t
-
-name :: Declaration -> String
-name (HasType n _)  = n
-name (HasDef n _ _) = n
-
-type Context = [Declaration]
-
-contextToEnv :: Context -> Either String Env
-contextToEnv [] = return []
-contextToEnv (HasDef x m _:ctx)
-  = do env <- contextToEnv ctx
-       rec v <- eval ((x,v):env) m
-       return $ (x,v):env
-contextToEnv (_:ctx) = contextToEnv ctx
-
+type Context = [(Int,Type)]
 
 
 
 
 -- Type Checking Monad
 
-type TypeChecker a = ReaderT (Signature,Context) Maybe a
+type NameStore = Int
 
-runTypeChecker :: TypeChecker a -> Signature -> Context -> Maybe a
-runTypeChecker = curry.runReaderT
+type TypeChecker a = StateT (Signature,Definitions,Context,NameStore) Maybe a
+
+runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> NameStore -> Maybe a
+runTypeChecker tc sig defs ctx i
+  = fmap fst (runStateT tc (sig,defs,ctx,i))
 
 failure :: TypeChecker a
-failure = ReaderT $ \_ -> Nothing
+failure = StateT $ \_ -> Nothing
 
 signature :: TypeChecker Signature
-signature = do (sig,_) <- ask
+signature = do (sig,_,_,_) <- get
                return sig
 
+definitions :: TypeChecker Definitions
+definitions = do (_,defs,_,_) <- get
+                 return defs
+
 context :: TypeChecker Context
-context = do (_,ctx) <- ask
+context = do (_,_,ctx,_) <- get
              return ctx
 
-extend :: Context -> TypeChecker a -> TypeChecker a
-extend ectx = local (\(sig,ctx) -> (sig,ectx++ctx))
+extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
+extendDefinitions edefs tc
+  = do (sig,defs,ctx,i) <- get
+       put (sig,edefs ++ defs,ctx,i)
+       x <- tc
+       put (sig,defs,ctx,i)
+       return x
 
+extendContext :: Context -> TypeChecker a -> TypeChecker a
+extendContext ectx tc
+  = do (sig,defs,ctx,i) <- get
+       put (sig,defs,ectx++ctx,i)
+       x <- tc
+       put (sig,defs,ctx,i)
+       return x
 
+newName :: TypeChecker Int
+newName = do (sig,defs,ctx,i) <- get
+             put (sig,defs,ctx,i+1)
+             return i
 
 tyconExists :: String -> TypeChecker ()
 tyconExists n = do Signature tycons _ <- signature
@@ -95,15 +111,19 @@ typeInSignature n = do Signature _ consigs <- signature
                          Nothing -> failure
                          Just t  -> return t
 
+typeInDefinitions :: String -> TypeChecker Type
+typeInDefinitions x
+  = do defs <- definitions
+       case find (\(y,_,_) -> y == x) defs of
+         Nothing      -> failure
+         Just (_,_,t) -> return t
 
-typeInContext :: String -> TypeChecker Type
-typeInContext x = do ctx <- context
-                     go ctx
-  where
-    go [] = failure
-    go (HasType y t  : _) | x == y = return t
-    go (HasDef y _ t : _) | x == y = return t
-    go (_:ctx) = go ctx
+typeInContext :: Int -> TypeChecker Type
+typeInContext i
+  = do ctx <- context
+       case lookup i ctx of
+         Nothing -> failure
+         Just t  -> return t
 
 
 
@@ -118,27 +138,29 @@ isType (Fun a b)  = isType a >> isType b
 -- Type Inference
 
 infer :: Term -> TypeChecker Type
-infer (Var x)     = typeInContext x
-infer (Ann m t)   = check m t >> return t
-infer (Lam x b)   = failure
-infer (App f a)   = do Fun arg ret <- infer f
-                       check a arg
-                       return ret
-infer (Con c as)  = do ConSig args ret <- typeInSignature c
-                       guard $ length as == length args
-                       sequence_ (zipWith check as args)
-                       return ret
-infer (Case m cs) = do t <- infer m
-                       t' <- inferClauses t cs
-                       return t'
+infer (Var (Name x))      = typeInDefinitions x
+infer (Var (Generated i)) = typeInContext i
+infer (Ann m t)           = check m t >> return t
+infer (Lam sc)            = failure
+infer (App f a)           = do Fun arg ret <- infer f
+                               check a arg
+                               return ret
+infer (Con c as)          = do ConSig args ret <- typeInSignature c
+                               guard $ length as == length args
+                               sequence_ (zipWith check as args)
+                               return ret
+infer (Case m cs)         = do t <- infer m
+                               t' <- inferClauses t cs
+                               return t'
 
 
 inferClause :: Type -> Clause -> TypeChecker Type
-inferClause patTy (Clause p b) = do ctx' <- checkPattern p patTy
-                                    ctx <- context
-                                    extend ctx'
-                                         $ infer b
-
+inferClause patTy (Clause p sc)
+  = do ctx' <- checkPattern p patTy
+       let xs = [ Var (Generated i) | (i,_) <- ctx' ]
+       ctx <- context
+       extendContext ctx'
+         $ infer (instantiate sc xs)
 
 inferClauses :: Type -> [Clause] -> TypeChecker Type
 inferClauses patTy cs = do ts <- sequence $ map (inferClause patTy) cs
@@ -156,10 +178,11 @@ check (Var x)     t = do t' <- infer (Var x)
                          guard $ t == t'
 check (Ann m t')  t = do guard $ t == t'
                          check m t'
-check (Lam x b)   t = case t of
+check (Lam sc)    t = case t of
                         Fun arg ret
-                          -> extend [HasType x arg]
-                                  $ check b ret
+                          -> do i <- newName
+                                extendContext [(i,arg)]
+                                  $ check (instantiate sc [Var (Generated i)]) ret
                         _ -> failure
 check (App f a)   t = do Fun arg ret <- infer f
                          guard $ ret == t
@@ -171,23 +194,22 @@ check (Case m cs) t = do t' <- infer m
 
 
 checkPattern :: Pattern -> Type -> TypeChecker Context
-checkPattern patTy t = do ctx <- go patTy t
-                          let names = map name ctx
-                          guard $ length names == length (nub names)
-                          return ctx
-  where
-    go (VarPat x)    t = return [HasType x t]
-    go (ConPat c ps) t = do ConSig args ret <- typeInSignature c
-                            guard $ length ps == length args
-                                 && t == ret
-                            rss <- sequence $ zipWith go ps args
-                            return $ concat rss
+checkPattern VarPat t
+  = do i <- newName
+       return [(i,t)]
+checkPattern (ConPat c ps) t
+  = do ConSig args ret <- typeInSignature c
+       guard $ length ps == length args
+            && t == ret
+       rss <- zipWithM checkPattern ps args
+       return $ concat rss
 
 
 checkClauses :: Type -> [Clause] -> Type -> TypeChecker ()
 checkClauses patTy [] t = return ()
-checkClauses patTy (Clause p b:cs) t = do ctx' <- checkPattern p patTy
-                                          ctx <- context
-                                          extend ctx'
-                                               $ check b t
-                                          checkClauses patTy cs t
+checkClauses patTy (Clause p sc:cs) t
+  = do ctx' <- checkPattern p patTy
+       let xs = [ Var (Generated i) | (i,_) <- ctx' ]
+       extendContext ctx'
+         $ check (instantiate sc xs) t
+       checkClauses patTy cs t

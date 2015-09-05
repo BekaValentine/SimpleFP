@@ -1,9 +1,17 @@
 module Simple.Core.Type where
 
+
+
+-- Types
+
 data Type
   = TyCon String
   | Fun Type Type
   deriving (Eq)
+
+
+
+-- Show Instance
 
 data TypeParenLoc = RootType | FunLeft | FunRight
   deriving (Eq)
