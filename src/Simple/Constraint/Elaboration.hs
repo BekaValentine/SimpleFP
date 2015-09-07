@@ -9,46 +9,54 @@ import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Program
 
-import Simple.Constraint.TypeChecking hiding (signature,context,putContext)
+import Simple.Constraint.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
 
 
-type Elaborator a = StateT (Signature,Context) (Either String) a
+type Elaborator a = StateT (Signature,Definitions,Context) (Either String) a
 
-runElaborator :: Elaborator () -> Either String (Signature,Context)
-runElaborator elab = do (_,p) <- runStateT elab (Signature [] [],[])
+runElaborator :: Elaborator () -> Either String (Signature,Definitions,Context)
+runElaborator elab = do (_,p) <- runStateT elab (Signature [] [],[],[])
                         return p
 
 signature :: Elaborator Signature
-signature = do (sig,_) <- get
+signature = do (sig,_,_) <- get
                return sig
 
+definitions :: Elaborator Definitions
+definitions = do (_,defs,_) <- get
+                 return defs
+
 context :: Elaborator Context
-context = do (_,ctx) <- get
+context = do (_,_,ctx) <- get
              return ctx
 
 putSignature :: Signature -> Elaborator ()
-putSignature sig = do ctx <- context
-                      put (sig,ctx)
+putSignature sig = do (_,defs,ctx) <- get
+                      put (sig,defs,ctx)
+
+putDefinitions :: Definitions -> Elaborator ()
+putDefinitions defs = do (sig,_,ctx) <- get
+                         put (sig,defs,ctx)
 
 putContext :: Context -> Elaborator ()
-putContext ctx = do sig <- signature
-                    put (sig,ctx)
+putContext ctx = do (sig,defs,_) <- get
+                    put (sig,defs,ctx)
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
-when' tc e = do (sig,ctx) <- get
-                case runTypeChecker tc sig (contextToPatternContext ctx) of
+when' tc e = do (sig,defs,ctx) <- get
+                case runTypeChecker tc sig defs (contextToPatternContext ctx) of
                   Nothing -> return ()
                   Just _  -> e
 
 unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
-unless' tc e = do (sig,ctx) <- get
-                  case runTypeChecker tc sig (contextToPatternContext ctx) of
+unless' tc e = do (sig,defs,ctx) <- get
+                  case runTypeChecker tc sig defs (contextToPatternContext ctx) of
                     Nothing -> e
                     Just _  -> return ()
 
 addDeclaration :: String -> Term -> Type -> Elaborator ()
-addDeclaration n def ty = do ctx <- context
-                             putContext (HasDef n def ty : ctx)
+addDeclaration n def ty = do defs <- definitions
+                             putDefinitions ((n,def,ty):defs)
 
 addTypeConstructor :: String -> Elaborator ()
 addTypeConstructor n = do Signature tycons consigs <- signature
@@ -66,11 +74,11 @@ addConstructor tycon n args
 elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
   = do let ty' = typeToPatternType ty
-       when' (typeInContext n)
+       when' (typeInDefinitions n)
            $ fail ("Term already defined: " ++ n)
        unless' (isType ty)
              $ fail ("Invalid type: " ++ show ty)
-       unless' (extend [PHasType n ty'] (check def ty'))
+       unless' (extendDefinitions [(n,def,ty)] (check def ty'))
              $ fail ("Definition value does not type check." ++
                      "\n  Term: " ++ show def ++
                      "\n  Expected type: " ++ show ty)
