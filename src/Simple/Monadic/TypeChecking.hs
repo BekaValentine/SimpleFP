@@ -9,6 +9,7 @@ import Data.List (intercalate,nub,find)
 
 import Env
 import Eval
+import Scope
 import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Evaluation

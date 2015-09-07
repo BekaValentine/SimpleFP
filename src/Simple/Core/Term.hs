@@ -10,6 +10,7 @@ import Control.Monad.State
 import Data.List (intercalate)
 
 import Parens
+import Scope
 import Simple.Core.Type
 
 
@@ -20,19 +21,16 @@ data Variable
   = Name String
   | Generated Int
 
-data Scope
-  = Scope { instantiate :: [Term] -> Term }
-
 data Term
   = Var Variable
   | Ann Term Type
-  | Lam Scope
+  | Lam (Scope Term)
   | App Term Term
   | Con String [Term]
   | Case Term [Clause]
 
 data Clause
-  = Clause Pattern Scope
+  = Clause Pattern (Scope Term)
 
 data Pattern
   = VarPat
@@ -44,7 +42,7 @@ data Pattern
 
 instance Show Variable where
   show (Name x) = x
-  show (Generated i) = "$" ++ show i
+  show (Generated i) = "_" ++ show i
 
 next :: State Int Int
 next = do i <- get

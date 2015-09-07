@@ -4,6 +4,7 @@ import Control.Monad (zipWithM)
 import Data.List (intercalate)
 
 import Eval
+import Scope
 import Simple.Core.Term
 
 

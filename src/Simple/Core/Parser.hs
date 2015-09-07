@@ -8,6 +8,7 @@ import Text.Parsec
 import qualified Text.Parsec.Token as Token
 
 import Abs
+import Scope
 import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Program
@@ -17,7 +18,7 @@ import Simple.Core.Program
 
 -- Abstraction
 
-abstractScope :: Scope -> Abstracted Term Scope
+abstractScope :: Scope Term -> Abstracted Term (Scope Term)
 abstractScope (Scope f)
   = reader $ \e ->
       Scope $ \vs' -> runReader (abstract (f vs')) e
