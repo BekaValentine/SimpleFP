@@ -49,14 +49,14 @@ next = do i <- get
           put (i+1)
           return i
 
-data PatternParenLoc = RootPattern | ConPatArg
+data PatternParenLoc = ConPatArg
   deriving (Eq)
 
 instance ParenLoc Pattern where
   type Loc Pattern = PatternParenLoc
-  parenLoc VarPat        = [RootPattern,ConPatArg]
-  parenLoc (ConPat _ []) = [RootPattern,ConPatArg]
-  parenLoc (ConPat _ _)  = [RootPattern]
+  parenLoc VarPat        = [ConPatArg]
+  parenLoc (ConPat _ []) = [ConPatArg]
+  parenLoc (ConPat _ _)  = []
 
 instance ParenBound (State Int) Pattern where
   parenBound VarPat
@@ -70,25 +70,25 @@ instance ParenBound (State Int) Pattern where
          return (c ++ " " ++ intercalate " " ps', concat xs)
 
 
-data TermParenLoc = RootTerm | AnnLeft | LamBody | AppLeft | AppRight | ConArg | CaseArg
+data TermParenLoc = AnnLeft | LamBody | AppLeft | AppRight | ConArg | CaseArg
   deriving (Eq)
 
 instance ParenLoc Term where
   type Loc Term = TermParenLoc
   parenLoc (Var _)
-    = [RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg]
+    = [AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg]
   parenLoc (Ann _ _)
-    = [RootTerm,LamBody,CaseArg]
+    = [LamBody,CaseArg]
   parenLoc (Lam _)
-    = [RootTerm,LamBody,CaseArg]
+    = [LamBody,CaseArg]
   parenLoc (App _ _)
-    = [RootTerm,AnnLeft,LamBody,AppLeft,CaseArg]
+    = [AnnLeft,LamBody,AppLeft,CaseArg]
   parenLoc (Con _ [])
-    = [RootTerm,AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg]
+    = [AnnLeft,LamBody,AppLeft,AppRight,ConArg,CaseArg]
   parenLoc (Con _ _)
-    = [RootTerm,AnnLeft,LamBody,CaseArg]
+    = [AnnLeft,LamBody,CaseArg]
   parenLoc (Case _ _)
-    = [RootTerm,LamBody]
+    = [LamBody]
 
 instance ParenRec (State Int) Term where
   parenRec (Var (Name x))
@@ -100,7 +100,8 @@ instance ParenRec (State Int) Term where
          return $ m' ++ " : " ++ show t
   parenRec (Lam sc)
     = do i <- next
-         b' <- parenthesize (Just LamBody) (instantiate sc [Var (Generated i)])
+         b' <- parenthesize (Just LamBody)
+                 (instantiate sc [Var (Generated i)])
          return $ "\\" ++ show i ++ " -> " ++ b'
   parenRec (App f a)
     = do f' <- parenthesize (Just AppLeft) f
@@ -118,8 +119,9 @@ instance ParenRec (State Int) Term where
     where
       auxClause (Clause p sc)
         = do (pat,is) <- parenthesizeBound Nothing p
-             b <- parenthesize Nothing (instantiate sc (map (Var . Generated) is))
-             return $ pat ++ " -> " ++ b
+             b' <- parenthesize Nothing
+                    (instantiate sc (map (Var . Generated) is))
+             return $ pat ++ " -> " ++ b'
 
 instance Show Term where
   show t = fst (runState (parenRec t) (0 :: Int))
