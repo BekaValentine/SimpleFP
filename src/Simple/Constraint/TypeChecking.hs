@@ -7,7 +7,7 @@ import System.IO.Unsafe
 import Control.Applicative ((<$>))
 import Control.Monad (guard,forM,zipWithM)
 import Control.Monad.Trans.State
-import Data.List (intercalate,nub,find)
+import Data.List (intercalate,nubBy,find)
 import Data.Maybe (fromMaybe,fromJust)
 
 import Env
@@ -187,7 +187,7 @@ addSubstitutions subs'
     completeSubstitution subs'
       = do subs <- substitution
            let subs2 = subs' ++ subs
-               subs2' = map (\(k,v) -> (k,substitute subs2 v)) subs2
+               subs2' = nubBy (\(a,_) (b,_) -> a == b) (map (\(k,v) -> (k,substitute subs2 v)) subs2)
            putSubstitution subs2'
     
     substitute :: Substitution -> PatternType -> PatternType
