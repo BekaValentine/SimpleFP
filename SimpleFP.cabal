@@ -16,7 +16,9 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Simple.Monadic.REPL
+  exposed-modules:     Simple.Monadic.REPL,
+                       Simple.Constraint.REPL,
+                       Poly.Constraint.REPL
                        
   -- other-modules:       
   other-extensions:    RecursiveDo

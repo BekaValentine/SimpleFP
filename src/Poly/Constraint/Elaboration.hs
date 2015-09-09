@@ -1,76 +1,86 @@
 module Poly.Constraint.Elaboration where
 
+import Control.Applicative ((<$>),(<*>))
 import Control.Monad (when,unless)
+import Control.Monad.Reader
 import Control.Monad.Trans.State
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 
+import Abs
+import Scope
 import Poly.Core.Term
 import Poly.Core.Type
 import Poly.Core.Program
 
-import Poly.Constraint.TypeChecking hiding (signature,context,putContext)
+import Poly.Constraint.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
 
 
-type Elaborator a = StateT (Signature,Context) (Either String) a
+type Elaborator a = StateT (Signature,Definitions,Context) (Either String) a
 
-runElaborator :: Elaborator () -> Either String (Signature,Context)
-runElaborator elab = do (_,p) <- runStateT elab (Signature [] [],[])
+runElaborator :: Elaborator () -> Either String (Signature,Definitions,Context)
+runElaborator elab = do (_,p) <- runStateT elab (Signature [] [],[],[])
                         return p
 
 signature :: Elaborator Signature
-signature = do (sig,_) <- get
+signature = do (sig,_,_) <- get
                return sig
 
+definitions :: Elaborator Definitions
+definitions = do (_,defs,_) <- get
+                 return defs
+
 context :: Elaborator Context
-context = do (_,ctx) <- get
+context = do (_,_,ctx) <- get
              return ctx
 
 putSignature :: Signature -> Elaborator ()
-putSignature sig = do ctx <- context
-                      put (sig,ctx)
+putSignature sig = do (_,defs,ctx) <- get
+                      put (sig,defs,ctx)
+
+putDefinitions :: Definitions -> Elaborator ()
+putDefinitions defs = do (sig,_,ctx) <- get
+                         put (sig,defs,ctx)
 
 putContext :: Context -> Elaborator ()
-putContext ctx = do sig <- signature
-                    put (sig,ctx)
+putContext ctx = do (sig,defs,_) <- get
+                    put (sig,defs,ctx)
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
-when' tc e = do (sig,ctx) <- get
-                case runTypeChecker tc sig (contextToPatternContext ctx) of
+when' tc e = do (sig,defs,ctx) <- get
+                case runTypeChecker tc sig defs ctx of
                   Nothing -> return ()
                   Just _  -> e
 
 unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
-unless' tc e = do (sig,ctx) <- get
-                  case runTypeChecker tc sig (contextToPatternContext ctx) of
+unless' tc e = do (sig,defs,ctx) <- get
+                  case runTypeChecker tc sig defs ctx of
                     Nothing -> e
                     Just _  -> return ()
 
 addDeclaration :: String -> Term -> Type -> Elaborator ()
-addDeclaration n def ty = do ctx <- context
-                             putContext (HasDef n def ty : ctx)
+addDeclaration n def ty = do defs <- definitions
+                             putDefinitions ((n,def,ty) : defs)
 
 addTypeConstructor :: String -> Int -> Elaborator ()
-addTypeConstructor n arity = do Signature tyconsigs consigs <- signature
-                                putSignature (Signature ((n,TyConSig arity):tyconsigs) consigs)
+addTypeConstructor n arity
+  = do Signature tyconsigs consigs <- signature
+       putSignature (Signature ((n,TyConSig arity):tyconsigs) consigs)
 
-addConstructor :: String -> [String] -> String -> [Type] -> Elaborator ()
-addConstructor tycon params n args
+addConstructor :: String -> ConSig -> Elaborator ()
+addConstructor n consig
   = do Signature tycons consigs <- signature
-       let consig = ConSig params args (TyCon tycon (map TyVar params))
        putSignature (Signature tycons ((n,consig):consigs))
-
 
 
 
 elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
-  = do let ty' = typeToPatternType ty
-       when' (typeInContext n)
+  = do when' (typeInDefinitions n)
            $ fail ("Term already defined: " ++ n)
-       unless' (isType [] ty)
+       unless' (isType ty)
              $ fail ("Invalid type: " ++ show ty)
-       unless' (extend [PHasType n ty'] (check def ty'))
+       unless' (extendDefinitions [(n,def,ty)] (check def ty))
              $ fail ("Definition value does not type check." ++
                      "\n  Term: " ++ show def ++
                      "\n  Expected type: " ++ show ty)
@@ -78,15 +88,52 @@ elabTermDecl (TermDeclaration n ty def)
 
 
 
+abstractScope :: Abstract a => Scope e a -> Abstracted a (Scope e a)
+abstractScope (Scope f)
+  = reader $ \e ->
+      Scope $ \vs' -> runReader (abstract (f vs')) e
+
+instance Abstract Type where
+  abstract (TyVar (TyName x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> TyVar (TyName x)
+          Just m  -> m
+  abstract (TyVar (TyGenerated i))
+    = return $ TyVar (TyGenerated i)
+  abstract (TyCon c as)
+    = TyCon c <$> mapM abstract as
+  abstract (Fun a b)
+    = Fun <$> abstract a <*> abstract b
+  abstract (Forall sc)
+    = Forall <$> abstractScope sc
+
+forallHelper :: String -> Type -> Type
+forallHelper x b = Forall (Scope $ \[a] -> runReader (abstract b) [(x,a)])
+
 elabAlt :: String -> [String] -> String -> [Type] -> Elaborator ()
 elabAlt tycon params n args
   = do when' (typeInSignature n)
            $ fail ("Constructor already declared: " ++ n)
-       unless' (sequence_ (map (isType params) args))
+       let args' = mapM abstract args
+           ret' = abstract (TyCon tycon (map (TyVar . TyName) params))
+           consig' = ConSig (length params) (Scope $ \vs ->
+                       let e = zip params vs
+                       in (runReader args' e, runReader ret' e))
+       unless' (sequence_ (map isType args))
              $ fail ("Invalid constructor signature: " ++
-                     show (ConSig params args (TyCon tycon (map TyVar params))))
+                     show consig')
+       addConstructor n consig'
+{-}
+       let sc = Scope $ \vs ->
+                  let e = _
+                  in (args',ret')
+       unless' (sequence_ (map isType args))
+             $ fail ("Invalid constructor signature: " ++
+                     show (ConSig sc)
        addConstructor tycon params n args
-
+  -}
+  
 elabAlts :: String -> [String] -> [(String, [Type])] -> Elaborator ()
 elabAlts tycon params [] = return ()
 elabAlts tycon params ((n,args):cs) = do elabAlt tycon params n args
@@ -94,7 +141,7 @@ elabAlts tycon params ((n,args):cs) = do elabAlt tycon params n args
 
 elabTypeDecl :: TypeDeclaration -> Elaborator ()
 elabTypeDecl (TypeDeclaration tycon params alts)
-  = do when' (isType [] (TyCon tycon (map TyVar params)))
+  = do when' (isType (TyCon tycon (map (TyVar . TyName) params)))
            $ fail ("Type constructor already declared: " ++ tycon)
        addTypeConstructor tycon (length params)
        elabAlts tycon params alts

@@ -1,11 +1,14 @@
 module Poly.Core.Parser where
 
-import Control.Applicative ((<$>),(*>),(<*),(<*>))
+import Control.Applicative ((<$>),(*>),(<*),(<*>),pure)
 import Control.Monad (guard)
+import Control.Monad.Reader
 import Data.List (foldl')
 import Text.Parsec
 import qualified Text.Parsec.Token as Token
 
+import Abs
+import Scope
 import Poly.Core.Term
 import Poly.Core.Type
 import Poly.Core.Program
@@ -13,7 +16,66 @@ import Poly.Core.Program
 
 
 
--- reserved keywords
+-- Abstraction
+
+abstractScope :: Abstract a => Scope e a -> Abstracted a (Scope e a)
+abstractScope (Scope f)
+  = reader $ \e ->
+      Scope $ \vs' -> runReader (abstract (f vs')) e
+
+abstractClause :: Clause -> Abstracted Term Clause
+abstractClause (Clause p sc)
+  = Clause p <$> abstractScope sc
+
+instance Abstract Term where
+  abstract (Var (Name x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> Var (Name x)
+          Just m  -> m
+  abstract (Var (Generated i))
+    = return $ Var (Generated i)
+  abstract (Ann m ty)
+    = Ann <$> abstract m <*> pure ty
+  abstract (Lam sc)
+    = Lam <$> abstractScope sc
+  abstract (App f a)
+    = App <$> abstract f <*> abstract a
+  abstract (Con c as)
+    = Con c <$> mapM abstract as
+  abstract (Case a cs)
+    = Case <$> abstract a <*> mapM abstractClause cs
+
+lamHelper :: String -> Term -> Term
+lamHelper x b = Lam (Scope $ \[a] -> runReader (abstract b) [(x,a)])
+
+clauseHelper :: Pattern -> [String] -> Term -> Clause
+clauseHelper p xs b = Clause p (Scope $ \as -> runReader (abstract b) (zip xs as))
+
+instance Abstract Type where
+  abstract (Meta i)
+    = return $ Meta i
+  abstract (TyVar (TyName x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> TyVar (TyName x)
+          Just m  -> m
+  abstract (TyVar (TyGenerated i))
+    = return $ TyVar (TyGenerated i)
+  abstract (TyCon c as)
+    = TyCon c <$> mapM abstract as
+  abstract (Fun a b)
+    = Fun <$> abstract a <*> abstract b
+  abstract (Forall sc)
+    = Forall <$> abstractScope sc
+
+forallHelper :: String -> Type -> Type
+forallHelper x b = Forall (Scope $ \[a] -> runReader (abstract b) [(x,a)])
+
+
+
+
+-- Language Definition
 
 languageDef :: Token.LanguageDef st
 languageDef = Token.LanguageDef
@@ -64,13 +126,13 @@ funType = do arg <- try $ do
              ret <- funRight
              return $ Fun arg ret
 
-typeVar = TyVar <$> varName
+typeVar = TyVar <$> (TyName <$> varName)
 
 forallType = do _ <- reserved "forall"
                 x <- varName
                 _ <- reservedOp "."
                 b <- forallBody
-                return $ Forall x b
+                return $ forallHelper x b
 
 parenType = parens datatype
 
@@ -85,9 +147,10 @@ forallBody = funType <|> parenType <|> forallType <|> typeCon <|> typeVar
 datatype = funType <|> parenType <|> forallType <|> typeCon <|> typeVar
 
 
+
 -- term parsers
 
-variable = Var <$> varName
+variable = (Var . Name) <$> varName
 
 annotation = do m <- try $ do
                   m <- annLeft
@@ -100,7 +163,7 @@ lambda = do _ <- reservedOp "\\"
             x <- varName
             _ <- reservedOp "->"
             b <- lamBody
-            return $ Lam x b
+            return $ lamHelper x b
 
 application = do (f,a) <- try $ do
                    f <- appFun
@@ -116,14 +179,16 @@ conData = do c <- decName
              as <- many conArg
              return $ Con c as
 
-varPattern = VarPat <$> varName
+varPattern = do x <- varName
+                return (VarPat,[x])
 
 noArgConPattern = do c <- decName
-                     return $ ConPat c []
+                     return $ (ConPat c [], [])
 
 conPattern = do c <- decName
-                ps <- many conPatternArg
-                return $ ConPat c ps
+                psxs <- many conPatternArg
+                let (ps,xs) = unzip psxs
+                return $ (ConPat c ps, concat xs)
 
 parenPattern = parens pattern
 
@@ -131,12 +196,12 @@ conPatternArg = parenPattern <|> noArgConPattern <|> varPattern
 
 pattern = parenPattern <|> conPattern <|> varPattern
 
-clause = do p <- try $ do
+clause = do (p,xs) <- try $ do
               p <- pattern
               _ <- reservedOp "->"
               return p
             b <- term
-            return $ Clause p b
+            return $ clauseHelper p xs b --Clause p b
 
 caseExp = do _ <- reserved "case"
              m <- caseArg

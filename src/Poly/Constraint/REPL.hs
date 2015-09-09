@@ -1,11 +1,15 @@
 module Poly.Constraint.REPL where
 
+import Control.Monad.Reader
 import System.IO
 
+import Env
+import Eval
 import Poly.Constraint.Elaboration
 import Poly.Constraint.TypeChecking
 import Poly.Core.Evaluation
 import Poly.Core.Parser
+import Poly.Core.Term
 
 flushStr :: String -> IO ()
 flushStr str = putStr str >> hFlush stdout
@@ -23,30 +27,30 @@ until_ p prompt action = do
 repl :: String -> IO ()
 repl src = case loadProgram src of
              Left e -> flushStr e
-             Right (sig,ctx,env)
+             Right (sig,defs,ctx,env)
                -> do hSetBuffering stdin LineBuffering
                      until_ (== ":quit")
                             (readPrompt "$> ")
-                            (evalAndPrint sig ctx env)
+                            (evalAndPrint sig defs ctx env)
   where
-    loadProgram :: String -> Either String (Signature,Context,Env)
+    loadProgram :: String -> Either String (Signature,Definitions,Context,Environment Term)
     loadProgram src
       = do prog <- parseProgram src
-           (sig,ctx) <- runElaborator (elabProgram prog)
-           env <- contextToEnv ctx
-           return (sig,ctx,env)
+           (sig,defs,ctx) <- runElaborator (elabProgram prog)
+           let env = [ (x,m) | (x,m,_) <- defs ]
+           return (sig,defs,ctx,env)
     
-    loadTerm :: Signature -> Context -> Env -> String -> Either String Value
-    loadTerm sig ctx env src
+    loadTerm :: Signature -> Definitions -> Context -> Environment Term -> String -> Either String Term
+    loadTerm sig defs ctx env src
       = do tm <- parseTerm src
-           case runTypeChecker (infer tm) sig (contextToPatternContext ctx) of
+           case runTypeChecker (infer tm) sig defs ctx of
              Nothing -> Left "Unable to infer type."
-             Just _ -> eval env tm
+             Just _ -> runReaderT (eval tm) env
     
-    evalAndPrint :: Signature -> Context -> Env -> String -> IO ()
-    evalAndPrint _ _ _ "" = return ()
-    evalAndPrint sig ctx env src
-      = case loadTerm sig ctx env src of
+    evalAndPrint :: Signature -> Definitions -> Context -> Environment Term -> String -> IO ()
+    evalAndPrint _ _ _ _ "" = return ()
+    evalAndPrint sig defs ctx env src
+      = case loadTerm sig defs ctx env src of
           Left e -> flushStr (e ++ "\n")
           Right v -> flushStr (show v ++ "\n")
 

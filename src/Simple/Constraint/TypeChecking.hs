@@ -351,7 +351,8 @@ checkifyPattern (ConPat c ps) t
            ret' = typeToPatternType ret
        guard $ length ps == length args'
        unify t ret'
-       rss <- zipWithM checkifyPattern ps args'
+       args'' <- instantiateMetas args'
+       rss <- zipWithM checkifyPattern ps args''
        return $ concat rss
 
 checkifyClauses :: PatternType -> [Clause] -> PatternType -> TypeChecker ()
