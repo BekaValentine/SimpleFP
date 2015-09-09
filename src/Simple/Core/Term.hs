@@ -24,13 +24,13 @@ data Variable
 data Term
   = Var Variable
   | Ann Term Type
-  | Lam (Scope Term)
+  | Lam (Scope Term Term)
   | App Term Term
   | Con String [Term]
   | Case Term [Clause]
 
 data Clause
-  = Clause Pattern (Scope Term)
+  = Clause Pattern (Scope Term Term)
 
 data Pattern
   = VarPat

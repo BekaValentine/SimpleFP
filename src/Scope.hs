@@ -1,4 +1,4 @@
 module Scope where
 
-data Scope a
-  = Scope { instantiate :: [a] -> a }
+data Scope s a
+  = Scope { instantiate :: [s] -> a }

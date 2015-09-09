@@ -18,7 +18,7 @@ import Simple.Core.Program
 
 -- Abstraction
 
-abstractScope :: Scope Term -> Abstracted Term (Scope Term)
+abstractScope :: Scope Term Term -> Abstracted Term (Scope Term Term)
 abstractScope (Scope f)
   = reader $ \e ->
       Scope $ \vs' -> runReader (abstract (f vs')) e
