@@ -4,7 +4,6 @@
 module Simple.Core.Evaluation where
 
 import Control.Monad (zipWithM)
-import Data.List (intercalate)
 
 import Eval
 import Scope
