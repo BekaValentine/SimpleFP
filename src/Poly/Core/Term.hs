@@ -49,14 +49,14 @@ next = do i <- get
           put (i+1)
           return i
 
-data PatternParenLoc = RootPattern | ConPatArg
+data PatternParenLoc = ConPatArg
   deriving (Eq)
 
 instance ParenLoc Pattern where
   type Loc Pattern = PatternParenLoc
-  parenLoc VarPat        = [RootPattern,ConPatArg]
-  parenLoc (ConPat _ []) = [RootPattern,ConPatArg]
-  parenLoc (ConPat _ _)  = [RootPattern]
+  parenLoc VarPat        = [ConPatArg]
+  parenLoc (ConPat _ []) = [ConPatArg]
+  parenLoc (ConPat _ _)  = []
 
 instance ParenBound (State Int) Pattern where
   parenBound VarPat
