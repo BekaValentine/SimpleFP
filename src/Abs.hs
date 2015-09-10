@@ -1,4 +1,5 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Abs where
 
@@ -6,7 +7,7 @@ import Control.Monad.Reader
 
 import Env
 
-type Abstracted a = Reader (Environment a)
+type Abstracted i e a = Reader (Environment i e) a
 
-class Abstract a where
-  abstract :: a -> Abstracted a a
+class Abstract i e a where
+  abstract :: a -> Abstracted i e a

@@ -6,9 +6,9 @@ import Control.Monad.Reader
 
 import Env
 
-type Evaluator a = ReaderT (Environment a) (Either String)
+type Evaluator a = ReaderT (Environment String a) (Either String)
 
-environment :: Evaluator a (Environment a)
+environment :: Evaluator a (Environment String a)
 environment = ask
 
 class Eval a where

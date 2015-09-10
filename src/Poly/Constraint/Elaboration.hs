@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Poly.Constraint.Elaboration where
 
 import Control.Applicative ((<$>),(<*>))
@@ -88,12 +92,7 @@ elabTermDecl (TermDeclaration n ty def)
 
 
 
-abstractScope :: Abstract a => Scope e a -> Abstracted a (Scope e a)
-abstractScope (Scope f)
-  = reader $ \e ->
-      Scope $ \vs' -> runReader (abstract (f vs')) e
-
-instance Abstract Type where
+instance Abstract String Type Type where
   abstract (TyVar (TyName x))
     = reader $ \e ->
         case lookup x e of

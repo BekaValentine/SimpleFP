@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Poly.Core.Parser where
 
 import Control.Applicative ((<$>),(*>),(<*),(<*>),pure)
@@ -18,16 +22,11 @@ import Poly.Core.Program
 
 -- Abstraction
 
-abstractScope :: Abstract a => Scope e a -> Abstracted a (Scope e a)
-abstractScope (Scope f)
-  = reader $ \e ->
-      Scope $ \vs' -> runReader (abstract (f vs')) e
-
-abstractClause :: Clause -> Abstracted Term Clause
+abstractClause :: Clause -> Abstracted String Term Clause
 abstractClause (Clause p sc)
   = Clause p <$> abstractScope sc
 
-instance Abstract Term where
+instance Abstract String Term Term where
   abstract (Var (Name x))
     = reader $ \e ->
         case lookup x e of
@@ -52,7 +51,7 @@ lamHelper x b = Lam (Scope $ \[a] -> runReader (abstract b) [(x,a)])
 clauseHelper :: Pattern -> [String] -> Term -> Clause
 clauseHelper p xs b = Clause p (Scope $ \as -> runReader (abstract b) (zip xs as))
 
-instance Abstract Type where
+instance Abstract String Type Type where
   abstract (Meta i)
     = return $ Meta i
   abstract (TyVar (TyName x))

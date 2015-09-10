@@ -42,7 +42,7 @@ instance Show Signature where
 
 type Definitions = [(String,Term,Type)]
 
-definitionsToEnvironment :: Definitions -> Environment Term
+definitionsToEnvironment :: Definitions -> Environment String Term
 definitionsToEnvironment defs
   = [ (x,m) | (x,m,_) <- defs ]
 

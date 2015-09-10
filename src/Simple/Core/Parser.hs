@@ -1,3 +1,7 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+
 module Simple.Core.Parser where
 
 import Control.Applicative ((<$>),(<*>),pure,(*>),(<*))
@@ -18,16 +22,11 @@ import Simple.Core.Program
 
 -- Abstraction
 
-abstractScope :: Scope Term Term -> Abstracted Term (Scope Term Term)
-abstractScope (Scope f)
-  = reader $ \e ->
-      Scope $ \vs' -> runReader (abstract (f vs')) e
-
-abstractClause :: Clause -> Abstracted Term Clause
+abstractClause :: Clause -> Abstracted String Term Clause
 abstractClause (Clause p sc)
   = Clause p <$> abstractScope sc
 
-instance Abstract Term where
+instance Abstract String Term Term where
   abstract (Var (Name x))
     = reader $ \e ->
         case lookup x e of

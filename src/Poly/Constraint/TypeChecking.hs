@@ -3,7 +3,6 @@
 
 module Poly.Constraint.TypeChecking where
 
-import System.IO.Unsafe
 import Control.Monad (guard,forM,zipWithM,replicateM)
 import Control.Monad.Trans.State
 import Data.List (intercalate,nubBy,find)

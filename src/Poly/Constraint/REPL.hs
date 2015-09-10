@@ -33,21 +33,21 @@ repl src = case loadProgram src of
                             (readPrompt "$> ")
                             (evalAndPrint sig defs ctx env)
   where
-    loadProgram :: String -> Either String (Signature,Definitions,Context,Environment Term)
+    loadProgram :: String -> Either String (Signature,Definitions,Context,Environment String Term)
     loadProgram src
       = do prog <- parseProgram src
            (sig,defs,ctx) <- runElaborator (elabProgram prog)
            let env = [ (x,m) | (x,m,_) <- defs ]
            return (sig,defs,ctx,env)
     
-    loadTerm :: Signature -> Definitions -> Context -> Environment Term -> String -> Either String Term
+    loadTerm :: Signature -> Definitions -> Context -> Environment String Term -> String -> Either String Term
     loadTerm sig defs ctx env src
       = do tm <- parseTerm src
            case runTypeChecker (infer tm) sig defs ctx of
              Nothing -> Left "Unable to infer type."
              Just _ -> runReaderT (eval tm) env
     
-    evalAndPrint :: Signature -> Definitions -> Context -> Environment Term -> String -> IO ()
+    evalAndPrint :: Signature -> Definitions -> Context -> Environment String Term -> String -> IO ()
     evalAndPrint _ _ _ _ "" = return ()
     evalAndPrint sig defs ctx env src
       = case loadTerm sig defs ctx env src of
