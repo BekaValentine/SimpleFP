@@ -351,7 +351,7 @@ checkifyPattern (ConPat c ps) t
            ret' = typeToPatternType ret
        guard $ length ps == length args'
        unify t ret'
-       args'' <- instantiateMetas args'
+       args'' <- mapM instantiateMetas args'
        rss <- zipWithM checkifyPattern ps args''
        return $ concat rss
 
