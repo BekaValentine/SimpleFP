@@ -1,4 +1,5 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Eval where
 
@@ -6,13 +7,13 @@ import Control.Monad.Reader
 
 import Env
 
-type Evaluator a = ReaderT (Environment String a) (Either String)
+type Evaluator e = ReaderT (Environment String e) (Either String)
 
 environment :: Evaluator a (Environment String a)
 environment = ask
 
-class Eval a where
-  eval :: a -> Evaluator a a
+class Eval e a where
+  eval :: a -> Evaluator e a
 
-throw :: String -> Evaluator a b
+throw :: String -> Evaluator e a
 throw e = lift (Left e)

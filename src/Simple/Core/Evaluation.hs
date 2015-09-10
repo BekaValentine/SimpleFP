@@ -1,3 +1,6 @@
+{-# OPTIONS -Wall #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
 module Simple.Core.Evaluation where
 
 import Control.Monad (zipWithM)
@@ -29,7 +32,7 @@ matchClauses (Clause p sc:cs) v
 
 -- Standard Eager Evaluation
 
-instance Eval Term where
+instance Eval Term Term where
   eval (Var (Name x))
     = do env <- environment
          case lookup x env of
