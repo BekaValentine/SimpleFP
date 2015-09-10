@@ -47,9 +47,9 @@ instance Eval Term Term where
   eval (App f a)
     = do ef <- eval f
          ea <- eval a
-         case (ef, ea) of
-           (Lam sc, a') -> eval (instantiate sc [ea])
-           (_,_)        -> return $ App ef ea
+         case ef of
+           Lam sc -> eval (instantiate sc [ea])
+           _      -> return $ App ef ea
   eval (Con c as)
     = do eas <- mapM eval as
          return $ Con c eas
