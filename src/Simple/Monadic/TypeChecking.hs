@@ -58,49 +58,52 @@ type Context = [(Int,Type)]
 
 -- Type Checking Monad
 
-type NameStore = Int
+data TCState
+  = TCState
+    { tcSig :: Signature
+    , tcDefs :: Definitions
+    , tcCtx :: Context
+    , tcNextVar :: Int
+    }
 
-type TypeChecker a = StateT (Signature,Definitions,Context,NameStore) Maybe a
+type TypeChecker a = StateT TCState Maybe a
 
-runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> NameStore -> Maybe a
-runTypeChecker tc sig defs ctx i
-  = fmap fst (runStateT tc (sig,defs,ctx,i))
+runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Maybe a
+runTypeChecker tc sig defs ctx
+  = fmap fst (runStateT tc (TCState sig defs ctx 0))
 
 failure :: TypeChecker a
 failure = StateT $ \_ -> Nothing
 
 signature :: TypeChecker Signature
-signature = do (sig,_,_,_) <- get
-               return sig
+signature = tcSig <$> get
 
 definitions :: TypeChecker Definitions
-definitions = do (_,defs,_,_) <- get
-                 return defs
+definitions = tcDefs <$> get
 
 context :: TypeChecker Context
-context = do (_,_,ctx,_) <- get
-             return ctx
+context = tcCtx <$> get
 
 extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
 extendDefinitions edefs tc
-  = do (sig,defs,ctx,i) <- get
-       put (sig,edefs ++ defs,ctx,i)
+  = do s <- get
+       put (s { tcDefs = edefs ++ tcDefs s })
        x <- tc
-       put (sig,defs,ctx,i)
+       put s
        return x
 
 extendContext :: Context -> TypeChecker a -> TypeChecker a
 extendContext ectx tc
-  = do (sig,defs,ctx,i) <- get
-       put (sig,defs,ectx++ctx,i)
+  = do s <- get
+       put (s { tcCtx = ectx ++ tcCtx s })
        x <- tc
-       put (sig,defs,ctx,i)
+       put s
        return x
 
 newName :: TypeChecker Int
-newName = do (sig,defs,ctx,i) <- get
-             put (sig,defs,ctx,i+1)
-             return i
+newName = do s <- get
+             put (s { tcNextVar = 1 + tcNextVar s })
+             return $ tcNextVar s
 
 tyconExists :: String -> TypeChecker ()
 tyconExists n = do Signature tycons _ <- signature

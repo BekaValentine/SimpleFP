@@ -44,13 +44,13 @@ putDefinitions defs = do (sig,_,ctx) <- get
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
 when' tc e = do (sig,defs,ctx) <- get
-                case runTypeChecker tc sig defs ctx 0 of
+                case runTypeChecker tc sig defs ctx of
                   Nothing -> return ()
                   Just _  -> e
 
 unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
 unless' tc e = do (sig,defs,ctx) <- get
-                  case runTypeChecker tc sig defs ctx 0 of
+                  case runTypeChecker tc sig defs ctx of
                     Nothing -> e
                     Just _  -> return ()
 
