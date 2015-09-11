@@ -4,7 +4,7 @@
 
 module Simple.Core.Parser where
 
-import Control.Applicative ((<$>),(<*>),pure,(*>),(<*))
+import Control.Applicative ((<$>),(<*>),(*>),(<*))
 import Control.Monad (guard)
 import Control.Monad.Reader
 import Data.List (foldl')
@@ -35,7 +35,7 @@ instance Abstract String Term Term where
   abstract (Var (Generated i))
     = return $ Var (Generated i)
   abstract (Ann m ty)
-    = Ann <$> abstract m <*> pure ty
+    = Ann <$> abstract m <*> return ty
   abstract (Lam sc)
     = Lam <$> abstractScope sc
   abstract (App f a)
