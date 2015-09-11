@@ -84,41 +84,46 @@ contextToPatternContext = map (\(x,y) -> (x,typeToPatternType y))
 
 data Equation = Equation PatternType PatternType
 
-type NameStore = Int
-
 type MetaVar = Int
 
 type Substitution = [(MetaVar,PatternType)]
 
-type TypeChecker a = StateT (Signature, Definitions, PatternContext, NameStore, MetaVar, Substitution) Maybe a
+data TCState
+  = TCState
+    { tcSig :: Signature
+    , tcDefs :: Definitions
+    , tcCtx :: PatternContext
+    , tcNextName :: Int
+    , tcNextMeta :: MetaVar
+    , tcSubs :: [(MetaVar,PatternType)]
+    }
+
+type TypeChecker a = StateT TCState Maybe a
 
 runTypeChecker :: TypeChecker a -> Signature -> Definitions -> PatternContext -> Maybe a
 runTypeChecker checker sig defs ctx
-  = fmap fst (runStateT checker (sig,defs,ctx,0,0,[]))
+  = fmap fst (runStateT checker (TCState sig defs ctx 0 0 []))
       
 
 failure :: TypeChecker a
 failure = StateT (\_ -> Nothing)
 
 signature :: TypeChecker Signature
-signature = do (sig,_,_,_,_,_) <- get
-               return sig
+signature = tcSig <$> get
 
 definitions :: TypeChecker Definitions
-definitions = do (_,defs,_,_,_,_) <- get
-                 return defs
+definitions = tcDefs <$> get
 
 putDefinitions :: Definitions -> TypeChecker ()
-putDefinitions defs = do (sig,_,ctx,nextName,nextMeta,subs) <- get
-                         put (sig,defs,ctx,nextName,nextMeta,subs)
+putDefinitions defs = do s <- get
+                         put (s { tcDefs = defs })
 
 context :: TypeChecker PatternContext
-context = do (_,_,ctx,_,_,_) <- get
-             return ctx
+context = tcCtx <$> get
 
 putContext :: PatternContext -> TypeChecker ()
-putContext ctx = do (sig,defs,_,nextName,nextMeta,subs) <- get
-                    put (sig,defs,ctx,nextName,nextMeta,subs)
+putContext ctx = do s <- get
+                    put (s { tcCtx = ctx })
 
 extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
 extendDefinitions edefs tc
@@ -137,22 +142,21 @@ extendContext ectx tc
        return x
 
 newName :: TypeChecker Int
-newName = do (sig,defs,ctx,nextName,nextMeta,subs) <- get
-             put (sig,defs,ctx,nextName+1,nextMeta,subs)
-             return nextName
+newName = do s <- get
+             put (s { tcNextName = 1 + tcNextName s })
+             return $ tcNextName s
 
 newMetaVar :: TypeChecker PatternType
-newMetaVar = do (sig,defs,ctx,nextName,nextMeta,subs) <- get
-                put (sig,defs,ctx,nextName,nextMeta+1,subs)
-                return $ PMeta nextMeta
+newMetaVar = do s <- get
+                put (s { tcNextMeta = 1 + tcNextMeta s })
+                return $ PMeta (tcNextMeta s)
 
 substitution :: TypeChecker Substitution
-substitution = do (_,_,_,_,_,subs) <- get
-                  return subs
+substitution = tcSubs <$> get
 
 putSubstitution :: Substitution -> TypeChecker ()
-putSubstitution subs = do (sig,defs,ctx,nextName,nextMeta,_) <- get
-                          put (sig,defs,ctx,nextName,nextMeta,subs)
+putSubstitution subs = do s <- get
+                          put (s { tcSubs = subs })
 
 occurs :: MetaVar -> PatternType -> Bool
 occurs x (PTyCon _) = False
@@ -371,8 +375,8 @@ checkifyClauses patTy (Clause p sc:cs) t
 -- and there is a substitution for every meta-variable
 
 metasSolved :: TypeChecker ()
-metasSolved = do (_,_,_,_,nextMeta,subs) <- get
-                 guard $ nextMeta == length subs
+metasSolved = do s <- get
+                 guard $ tcNextMeta s == length (tcSubs s)
 
 check :: Term -> PatternType -> TypeChecker ()
 check m t = do checkify m t
