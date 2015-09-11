@@ -63,7 +63,7 @@ data TCState
     { tcSig :: Signature
     , tcDefs :: Definitions
     , tcCtx :: Context
-    , tcNextVar :: Int
+    , tcNextName :: Int
     }
 
 type TypeChecker a = StateT TCState Maybe a
@@ -102,8 +102,8 @@ extendContext ectx tc
 
 newName :: TypeChecker Int
 newName = do s <- get
-             put (s { tcNextVar = 1 + tcNextVar s })
-             return $ tcNextVar s
+             put (s { tcNextName = 1 + tcNextName s })
+             return $ tcNextName s
 
 tyconExists :: String -> TypeChecker ()
 tyconExists n = do Signature tycons _ <- signature
