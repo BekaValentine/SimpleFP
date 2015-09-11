@@ -114,7 +114,7 @@ instance ParenRec (State Int) Term where
   parenRec (Case a cs)
     = do a' <- parenthesize (Just CaseArg) a
          cs' <- mapM auxClause cs
-         return $ "case " ++ a' ++ " of " ++ intercalate " | " cs' ++ "end"
+         return $ "case " ++ a' ++ " of " ++ intercalate " | " cs' ++ " end"
     where
       auxClause (Clause p sc)
         = do (pat,is) <- parenthesizeBound Nothing p
