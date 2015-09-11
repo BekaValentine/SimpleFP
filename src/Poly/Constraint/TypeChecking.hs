@@ -3,6 +3,7 @@
 
 module Poly.Constraint.TypeChecking where
 
+import Control.Applicative ((<$>))
 import Control.Monad (guard,forM,zipWithM,replicateM)
 import Control.Monad.Trans.State
 import Data.List (intercalate,nubBy,find)
@@ -76,49 +77,54 @@ type TyVarContext = [Int]
 
 data Equation = Equation Type Type
 
-type NameStore = Int
-
 type MetaVar = Int
 
 type Substitution = [(MetaVar,Type)]
 
-type TypeChecker a = StateT (Signature, Definitions, Context, TyVarContext, NameStore, MetaVar, Substitution) Maybe a
+data TCState
+  = TCState
+    { tcSig :: Signature
+    , tcDefs :: Definitions
+    , tcCtx :: Context
+    , tcTyVarCtx :: TyVarContext
+    , tcNextName :: Int
+    , tcNextMeta :: MetaVar
+    , tcSubs :: Substitution
+    }
+
+type TypeChecker a = StateT TCState Maybe a
 
 runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Maybe a
 runTypeChecker checker sig defs ctx
-  = fmap fst (runStateT checker (sig,defs,ctx,[],0,0,[]))
+  = fmap fst (runStateT checker (TCState sig defs ctx [] 0 0 []))
       
 
 failure :: TypeChecker a
 failure = StateT (\_ -> Nothing)
 
 signature :: TypeChecker Signature
-signature = do (sig,_,_,_,_,_,_) <- get
-               return sig
+signature = tcSig <$> get
 
 definitions :: TypeChecker Definitions
-definitions = do (_,defs,_,_,_,_,_) <- get
-                 return defs
+definitions = tcDefs <$> get
 
 context :: TypeChecker Context
-context = do (_,_,ctx,_,_,_,_) <- get
-             return ctx
+context = tcCtx <$> get
 
 tyVarContext :: TypeChecker TyVarContext
-tyVarContext = do (_,_,_,tyVarCtx,_,_,_) <- get
-                  return tyVarCtx
+tyVarContext = tcTyVarCtx <$> get
 
 putDefinitions :: Definitions -> TypeChecker ()
-putDefinitions defs = do (sig,_,ctx,tyVarCtx,nextName,nextMeta,subs) <- get
-                         put (sig,defs,ctx,tyVarCtx,nextName,nextMeta,subs)
+putDefinitions defs = do s <- get
+                         put (s { tcDefs = defs })
 
 putContext :: Context -> TypeChecker ()
-putContext ctx = do (sig,defs,_,tyVarCtx,nextName,nextMeta,subs) <- get
-                    put (sig,defs,ctx,tyVarCtx,nextName,nextMeta,subs)
+putContext ctx = do s <- get
+                    put (s { tcCtx = ctx })
 
 putTyVarContext :: TyVarContext -> TypeChecker ()
-putTyVarContext tyVarCtx = do (sig,defs,ctx,_,nextName,nextMeta,subs) <- get
-                              put (sig,defs,ctx,tyVarCtx,nextName,nextMeta,subs)
+putTyVarContext tyVarCtx = do s <- get
+                              put (s { tcTyVarCtx = tyVarCtx })
 
 extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
 extendDefinitions edefs tc
@@ -143,22 +149,21 @@ extendTyVarContext etyVarCtx tc = do tyVarCtx <- tyVarContext
                                      return x
 
 newName :: TypeChecker Int
-newName = do (sig,defs,ctx,tyVarCtx,nextName,nextMeta,subs) <- get
-             put (sig,defs,ctx,tyVarCtx,nextName+1,nextMeta,subs)
-             return nextName
+newName = do s <- get
+             put (s { tcNextName = 1 + tcNextName s })
+             return $ tcNextName s
 
 newMetaVar :: TypeChecker Type
-newMetaVar = do (sig,defs,ctx,tyVarCtx,nextName,nextMeta,subs) <- get
-                put (sig,defs,ctx,tyVarCtx,nextName,nextMeta+1,subs)
-                return $ Meta nextMeta
+newMetaVar = do s <- get
+                put (s { tcNextMeta = 1 + tcNextMeta s })
+                return $ Meta (tcNextMeta s)
 
 substitution :: TypeChecker Substitution
-substitution = do (_,_,_,_,_,_,subs) <- get
-                  return subs
+substitution = tcSubs <$> get
 
 putSubstitution :: Substitution -> TypeChecker ()
-putSubstitution subs = do (sig,defs,ctx,tyVarCtx,tyvar,nextMeta,_) <- get
-                          put (sig,defs,ctx,tyVarCtx,tyvar,nextMeta,subs)
+putSubstitution subs = do s <- get
+                          put (s { tcSubs = subs })
 
 occurs :: MetaVar -> Type -> Bool
 occurs x (TyCon _ args) = any (occurs x) args
@@ -445,8 +450,8 @@ checkifyClauses patTy (Clause p sc:cs) t
 -- and there is a substitution for every meta-variable
 
 metasSolved :: TypeChecker ()
-metasSolved = do (_,_,_,_,_,nextMeta,subs) <- get
-                 guard $ nextMeta == length subs
+metasSolved = do s <- get
+                 guard $ tcNextMeta s == length (tcSubs s)
 
 check :: Term -> Type -> TypeChecker ()
 check m t = do checkify m t
