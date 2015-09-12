@@ -123,15 +123,6 @@ elabAlt tycon params n args
              $ fail ("Invalid constructor signature: " ++
                      show consig')
        addConstructor n consig'
-{-}
-       let sc = Scope $ \vs ->
-                  let e = _
-                  in (args',ret')
-       unless' (sequence_ (map isType args))
-             $ fail ("Invalid constructor signature: " ++
-                     show (ConSig sc)
-       addConstructor tycon params n args
-  -}
   
 elabAlts :: String -> [String] -> [(String, [Type])] -> Elaborator ()
 elabAlts tycon params [] = return ()
