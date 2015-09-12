@@ -4,7 +4,7 @@
 module Poly.Constraint.TypeChecking where
 
 import Control.Applicative ((<$>))
-import Control.Monad (guard,forM,zipWithM,replicateM)
+import Control.Monad (guard,zipWithM,replicateM)
 import Control.Monad.Trans.State
 import Data.List (intercalate,nubBy,find)
 import Data.Maybe (fromMaybe)
@@ -233,7 +233,7 @@ instantiateMetas subs (Meta i)
 instantiateMetas _ (TyVar x)
   = TyVar x
 instantiateMetas subs (Forall sc)
-  = Forall (Scope $ \vs -> instantiateMetas subs (instantiate sc vs))
+  = Forall (instantiateMetas subs <$> sc)
 
 
 typeInContext :: Int -> TypeChecker Type

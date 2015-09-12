@@ -11,3 +11,6 @@ abstractScope :: Abstract i e a => Scope s a -> Abstracted i e (Scope s a)
 abstractScope (Scope f)
   = reader $ \e ->
       Scope $ \vs' -> runReader (abstract (f vs')) e
+
+instance Functor (Scope s) where
+  fmap f (Scope b) = Scope (f . b)
