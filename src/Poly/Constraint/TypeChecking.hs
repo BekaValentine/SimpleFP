@@ -208,24 +208,13 @@ addSubstitutions subs0
     completeSubstitution subs'
       = do subs <- substitution
            let subs2 = subs' ++ subs
-               subs2' = nubBy (\(a,_) (b,_) -> a == b) (map (\(k,v) -> (k, substitute subs2 v)) subs2)
+               subs2' = nubBy (\(a,_) (b,_) -> a == b) (map (\(k,v) -> (k, instantiateMetas subs2 v)) subs2)
            putSubstitution subs2'
-    
-    substitute :: Substitution -> Type -> Type
-    substitute s (TyCon tycon args) = TyCon tycon (map (substitute s) args)
-    substitute s (Fun a b)          = Fun (substitute s a) (substitute s b)
-    substitute s (Meta i)           = case lookup i s of
-                                        Nothing -> Meta i
-                                        Just t  -> substitute s t
-    substitute _ (TyVar x)          = TyVar x
-    substitute s (Forall sc)        = Forall (Scope $ \vs -> substitute s (instantiate sc vs))
     
     substituteContext
       = do ctx <- context
-           ctx' <- forM ctx $ \(x,t) -> do
-                     subs <- substitution
-                     return (x,instantiateMetas subs t)
-           putContext ctx'
+           subs2 <- substitution
+           putContext (map (\(x,t) -> (x,instantiateMetas subs2 t)) ctx)
 
 
 unify :: Type -> Type -> TypeChecker ()
@@ -237,8 +226,10 @@ instantiateMetas subs (TyCon tycon args)
   = TyCon tycon (map (instantiateMetas subs) args)
 instantiateMetas subs (Fun a b)
   = Fun (instantiateMetas subs a) (instantiateMetas subs b)
-instantiateMetas subs (Meta x)
-  = fromMaybe (Meta x) (lookup x subs)
+instantiateMetas subs (Meta i)
+  = case lookup i subs of
+      Nothing -> Meta i
+      Just t  -> instantiateMetas subs t
 instantiateMetas _ (TyVar x)
   = TyVar x
 instantiateMetas subs (Forall sc)

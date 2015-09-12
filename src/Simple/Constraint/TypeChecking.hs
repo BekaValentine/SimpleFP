@@ -191,22 +191,13 @@ addSubstitutions subs'
     completeSubstitution subs'
       = do subs <- substitution
            let subs2 = subs' ++ subs
-               subs2' = nubBy (\(a,_) (b,_) -> a == b) (map (\(k,v) -> (k,substitute subs2 v)) subs2)
+               subs2' = nubBy (\(a,_) (b,_) -> a == b) (map (\(k,v) -> (k,instantiateMetas subs2 v)) subs2)
            putSubstitution subs2'
-    
-    substitute :: Substitution -> PatternType -> PatternType
-    substitute s (PTyCon tycon) = PTyCon tycon
-    substitute s (PFun a b)     = PFun (substitute s a) (substitute s b)
-    substitute s (PMeta i)      = case lookup i s of
-                                    Nothing -> PMeta i
-                                    Just t  -> substitute s t
     
     substituteContext
       = do ctx <- context
-           ctx' <- forM ctx $ \(x,t) -> do
-                     t' <- instantiateMetas t
-                     return (x,t')
-           putContext ctx'
+           subs2 <- substitution
+           putContext (map (\(x,t) -> (x,instantiateMetas subs2 t)) ctx)
 
 
 unify :: PatternType -> PatternType -> TypeChecker ()
@@ -214,16 +205,15 @@ unify p q = case solve [Equation p q] of
               Nothing    -> failure
               Just subs' -> addSubstitutions subs'
 
-instantiateMetas :: PatternType -> TypeChecker PatternType
-instantiateMetas (PTyCon tycon)
-  = return $ PTyCon tycon
-instantiateMetas (PFun a b)
-  = do a' <- instantiateMetas a
-       b' <- instantiateMetas b
-       return $ PFun a' b'
-instantiateMetas (PMeta x)
-  = do subs <- substitution
-       return $ fromMaybe (PMeta x) (lookup x subs)
+instantiateMetas :: Substitution -> PatternType -> PatternType
+instantiateMetas _ (PTyCon tycon)
+  = PTyCon tycon
+instantiateMetas subs (PFun a b)
+  = PFun (instantiateMetas subs a) (instantiateMetas subs b)
+instantiateMetas subs (PMeta i)
+  = case lookup i subs of
+      Nothing -> PMeta i
+      Just t  -> instantiateMetas subs t
 
 
 
@@ -275,8 +265,8 @@ inferify (Lam sc)
        arg <- newMetaVar
        ret <- extendContext [(i,arg)]
                 $ inferify (instantiate sc [Var (Generated i)])
-       arg' <- instantiateMetas arg
-       return $ PFun arg ret
+       subs <- substitution
+       return $ PFun (instantiateMetas subs arg) ret
 inferify (App f a)
   = do PFun arg ret <- inferify f
        checkify a arg
@@ -291,8 +281,8 @@ inferify (Con c as)
   where
     checkifyMulti :: [Term] -> [PatternType] -> TypeChecker ()
     checkifyMulti []     []     = return ()
-    checkifyMulti (m:ms) (t:ts) = do t' <- instantiateMetas t
-                                     checkify m t'
+    checkifyMulti (m:ms) (t:ts) = do subs <- substitution
+                                     checkify m (instantiateMetas subs t)
                                      checkifyMulti ms ts
     checkifyMulti _      _      = failure
 inferify (Case m cs) = do t <- inferify m
@@ -313,8 +303,8 @@ inferifyClauses patTy cs = do ts <- sequence $ map (inferifyClause patTy) cs
                               case ts of
                                 t:ts -> do
                                   sequence_ (map (unify t) ts)
-                                  t' <- instantiateMetas t
-                                  return t'
+                                  subs <- substitution
+                                  return (instantiateMetas subs t)
                                 _ -> failure
 
 
@@ -326,20 +316,19 @@ checkify (Var x)     t = do t' <- inferify (Var x)
                             unify t t'
 checkify (Ann m t')  t = do let pt' = typeToPatternType t'
                             unify t pt'
-                            pt2' <- instantiateMetas pt'
-                            checkify m pt2'
+                            subs <- substitution
+                            checkify m (instantiateMetas subs pt')
 checkify (Lam sc)    t = do i <- newName
                             arg <- newMetaVar
                             ret <- newMetaVar
                             unify t (PFun arg ret)
-                            arg' <- instantiateMetas arg
-                            ret' <- instantiateMetas ret
-                            extendContext [(i,arg')]
-                              $ checkify (instantiate sc [Var (Generated i)]) ret'
+                            subs <- substitution
+                            extendContext [(i,instantiateMetas subs arg)]
+                              $ checkify (instantiate sc [Var (Generated i)]) (instantiateMetas subs ret)
 checkify (App f a)   t = do arg <- newMetaVar
                             checkify f (PFun arg t)
-                            arg' <- instantiateMetas arg
-                            checkify a arg'
+                            subs <- substitution
+                            checkify a (instantiateMetas subs arg)
 checkify (Con c as)  t = do t' <- inferify (Con c as)
                             unify t t'
 checkify (Case m cs) t = do t' <- inferify m
@@ -355,8 +344,8 @@ checkifyPattern (ConPat c ps) t
            ret' = typeToPatternType ret
        guard $ length ps == length args'
        unify t ret'
-       args'' <- mapM instantiateMetas args'
-       rss <- zipWithM checkifyPattern ps args''
+       subs <- substitution
+       rss <- zipWithM checkifyPattern ps (map (instantiateMetas subs) args')
        return $ concat rss
 
 checkifyClauses :: PatternType -> [Clause] -> PatternType -> TypeChecker ()
@@ -385,4 +374,5 @@ check m t = do checkify m t
 infer :: Term -> TypeChecker PatternType
 infer m = do t <- inferify m
              metasSolved
-             instantiateMetas t
+             subs <- substitution
+             return $ instantiateMetas subs t
