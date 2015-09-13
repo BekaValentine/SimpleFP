@@ -285,9 +285,9 @@ inferify (Con c as)
                                      checkify m (instantiateMetas subs t)
                                      checkifyMulti ms ts
     checkifyMulti _      _      = failure
-inferify (Case m cs) = do t <- inferify m
-                          t' <- inferifyClauses t cs
-                          return t'
+inferify (Case m cs)
+  = do t <- inferify m
+       inferifyClauses t cs
 
 inferifyClause :: PatternType -> Clause -> TypeChecker PatternType
 inferifyClause patTy (Clause p sc)
@@ -299,40 +299,47 @@ inferifyClause patTy (Clause p sc)
 
 
 inferifyClauses :: PatternType -> [Clause] -> TypeChecker PatternType
-inferifyClauses patTy cs = do ts <- sequence $ map (inferifyClause patTy) cs
-                              case ts of
-                                t:ts -> do
-                                  sequence_ (map (unify t) ts)
-                                  subs <- substitution
-                                  return (instantiateMetas subs t)
-                                _ -> failure
+inferifyClauses patTy cs
+  = do ts <- sequence $ map (inferifyClause patTy) cs
+       case ts of
+         t:ts -> do
+           sequence_ (map (unify t) ts)
+           subs <- substitution
+           return (instantiateMetas subs t)
+         _ -> failure
 
 
 
 -- Type Checking
 
 checkify :: Term -> PatternType -> TypeChecker ()
-checkify (Var x)     t = do t' <- inferify (Var x)
-                            unify t t'
-checkify (Ann m t')  t = do let pt' = typeToPatternType t'
-                            unify t pt'
-                            subs <- substitution
-                            checkify m (instantiateMetas subs pt')
-checkify (Lam sc)    t = do i <- newName
-                            arg <- newMetaVar
-                            ret <- newMetaVar
-                            unify t (PFun arg ret)
-                            subs <- substitution
-                            extendContext [(i,instantiateMetas subs arg)]
-                              $ checkify (instantiate sc [Var (Generated i)]) (instantiateMetas subs ret)
-checkify (App f a)   t = do arg <- newMetaVar
-                            checkify f (PFun arg t)
-                            subs <- substitution
-                            checkify a (instantiateMetas subs arg)
-checkify (Con c as)  t = do t' <- inferify (Con c as)
-                            unify t t'
-checkify (Case m cs) t = do t' <- inferify m
-                            checkifyClauses t' cs t
+checkify (Var x) t
+  = do t' <- inferify (Var x)
+       unify t t'
+checkify (Ann m t') t
+  = do let pt' = typeToPatternType t'
+       unify t pt'
+       subs <- substitution
+       checkify m (instantiateMetas subs pt')
+checkify (Lam sc) t
+  = do i <- newName
+       arg <- newMetaVar
+       ret <- newMetaVar
+       unify t (PFun arg ret)
+       subs <- substitution
+       extendContext [(i,instantiateMetas subs arg)]
+         $ checkify (instantiate sc [Var (Generated i)]) (instantiateMetas subs ret)
+checkify (App f a) t
+  = do arg <- newMetaVar
+       checkify f (PFun arg t)
+       subs <- substitution
+       checkify a (instantiateMetas subs arg)
+checkify (Con c as) t
+  = do t' <- inferify (Con c as)
+       unify t t'
+checkify (Case m cs) t
+  = do t' <- inferify m
+       checkifyClauses t' cs t
 
 checkifyPattern :: Pattern -> PatternType -> TypeChecker PatternContext
 checkifyPattern VarPat t

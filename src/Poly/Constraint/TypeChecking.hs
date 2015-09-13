@@ -333,9 +333,9 @@ inferify (Con c as)
                                      checkify m (instantiateMetas subs t)
                                      checkifyMulti ms ts
     checkifyMulti _      _      = failure
-inferify (Case m cs) = do t <- inferify m
-                          t' <- inferifyClauses t cs
-                          return t'
+inferify (Case m cs)
+  = do t <- inferify m
+       inferifyClauses t cs
 
 inferifyClause :: Type -> Clause -> TypeChecker Type
 inferifyClause patTy (Clause p sc)
@@ -347,13 +347,14 @@ inferifyClause patTy (Clause p sc)
 
 
 inferifyClauses :: Type -> [Clause] -> TypeChecker Type
-inferifyClauses patTy cs = do ts <- sequence $ map (inferifyClause patTy) cs
-                              case ts of
-                                t:ts' -> do
-                                  sequence_ (map (unify t) ts')
-                                  subs <- substitution
-                                  return $ instantiateMetas subs t
-                                _ -> failure
+inferifyClauses patTy cs
+  = do ts <- sequence $ map (inferifyClause patTy) cs
+       case ts of
+         t:ts' -> do
+           sequence_ (map (unify t) ts')
+           subs <- substitution
+           return $ instantiateMetas subs t
+         _ -> failure
 
 
 
