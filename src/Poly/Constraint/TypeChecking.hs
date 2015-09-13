@@ -341,9 +341,8 @@ inferifyClause :: Type -> Clause -> TypeChecker Type
 inferifyClause patTy (Clause p sc)
   = do ctx' <- checkifyPattern p patTy
        let xs = [ Var (Generated i) | (i,_) <- ctx' ]
-       b' <- extendContext ctx'
-               $ inferify (instantiate sc xs)
-       return b'
+       extendContext ctx'
+         $ inferify (instantiate sc xs)
 
 
 inferifyClauses :: Type -> [Clause] -> TypeChecker Type
