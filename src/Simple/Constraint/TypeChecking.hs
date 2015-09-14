@@ -321,14 +321,10 @@ checkify (Ann m t') t
        unify t pt'
        subs <- substitution
        checkify m (instantiateMetas subs pt')
-checkify (Lam sc) t
+checkify (Lam sc) (PFun arg ret)
   = do i <- newName
-       arg <- newMetaVar
-       ret <- newMetaVar
-       unify t (PFun arg ret)
-       subs <- substitution
-       extendContext [(i,instantiateMetas subs arg)]
-         $ checkify (instantiate sc [Var (Generated i)]) (instantiateMetas subs ret)
+       extendContext [(i,arg)]
+         $ checkify (instantiate sc [Var (Generated i)]) ret
 checkify (App f a) t
   = do arg <- newMetaVar
        checkify f (PFun arg t)
@@ -340,6 +336,8 @@ checkify (Con c as) t
 checkify (Case m cs) t
   = do t' <- inferify m
        checkifyClauses t' cs t
+checkify _ _
+  = failure
 
 checkifyPattern :: Pattern -> PatternType -> TypeChecker PatternContext
 checkifyPattern VarPat t
