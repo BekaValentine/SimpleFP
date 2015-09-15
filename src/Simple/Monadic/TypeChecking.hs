@@ -142,20 +142,26 @@ isType (Fun a b)  = isType a >> isType b
 -- Type Inference
 
 infer :: Term -> TypeChecker Type
-infer (Var (Name x))      = typeInDefinitions x
-infer (Var (Generated i)) = typeInContext i
-infer (Ann m t)           = check m t >> return t
-infer (Lam sc)            = failure
-infer (App f a)           = do Fun arg ret <- infer f
-                               check a arg
-                               return ret
-infer (Con c as)          = do ConSig args ret <- typeInSignature c
-                               guard $ length as == length args
-                               sequence_ (zipWith check as args)
-                               return ret
-infer (Case m cs)         = do t <- infer m
-                               t' <- inferClauses t cs
-                               return t'
+infer (Var (Name x))
+  = typeInDefinitions x
+infer (Var (Generated i))
+  = typeInContext i
+infer (Ann m t)
+  = check m t >> return t
+infer (Lam sc)
+  = failure
+infer (App f a)
+  = do Fun arg ret <- infer f
+       check a arg
+       return ret
+infer (Con c as)
+  = do ConSig args ret <- typeInSignature c
+       guard $ length as == length args
+       sequence_ (zipWith check as args)
+       return ret
+infer (Case m cs)
+  = do t <- infer m
+       inferClauses t cs
 
 
 inferClause :: Type -> Clause -> TypeChecker Type
@@ -178,22 +184,27 @@ inferClauses patTy cs = do ts <- sequence $ map (inferClause patTy) cs
 -- Type Checking
 
 check :: Term -> Type -> TypeChecker ()
-check (Var x)     t = do t' <- infer (Var x)
-                         guard $ t == t'
-check (Ann m t')  t = do guard $ t == t'
-                         check m t'
-check (Lam sc)    t = case t of
-                        Fun arg ret
-                          -> do i <- newName
-                                extendContext [(i,arg)]
-                                  $ check (instantiate sc [Var (Generated i)]) ret
-                        _ -> failure
-check (App f a)   t = do t' <- infer (App f a)
-                         guard $ t == t'
-check (Con c as)  t = do t' <- infer (Con c as)
-                         guard $ t == t'
-check (Case m cs) t = do t' <- infer (Case m cs)
-                         guard $ t == t'
+check (Var x) t
+  = do t' <- infer (Var x)
+       guard $ t == t'
+check (Ann m t') t
+  = do guard $ t == t'
+       check m t'
+check (Lam sc) (Fun arg ret)
+  = do i <- newName
+       extendContext [(i,arg)]
+         $ check (instantiate sc [Var (Generated i)]) ret
+check (App f a) t
+  = do t' <- infer (App f a)
+       guard $ t == t'
+check (Con c as) t
+ = do t' <- infer (Con c as)
+      guard $ t == t'
+check (Case m cs) t
+  = do t' <- infer (Case m cs)
+       guard $ t == t'
+check _ _
+  = failure
 
 
 
