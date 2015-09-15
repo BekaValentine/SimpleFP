@@ -108,7 +108,7 @@ instance Abstract String Type Type where
     = Forall <$> abstractScope sc
 
 forallHelper :: String -> Type -> Type
-forallHelper x b = Forall (Scope $ \[a] -> runReader (abstract b) [(x,a)])
+forallHelper x b = Forall (Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
 
 elabAlt :: String -> [String] -> String -> [Type] -> Elaborator ()
 elabAlt tycon params n args
@@ -116,7 +116,7 @@ elabAlt tycon params n args
            $ fail ("Constructor already declared: " ++ n)
        let args' = mapM abstract args
            ret' = abstract (TyCon tycon (map (TyVar . TyName) params))
-           consig' = ConSig (length params) (Scope $ \vs ->
+           consig' = ConSig (length params) (Scope params $ \vs ->
                        let e = zip params vs
                        in (runReader args' e, runReader ret' e))
        unless' (sequence_ (map isType args))

@@ -46,10 +46,10 @@ instance Abstract String Term Term where
     = Case <$> abstract a <*> mapM abstractClause cs
 
 lamHelper :: String -> Term -> Term
-lamHelper x b = Lam (Scope $ \[a] -> runReader (abstract b) [(x,a)])
+lamHelper x b = Lam (Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
 
 clauseHelper :: Pattern -> [String] -> Term -> Clause
-clauseHelper p xs b = Clause p (Scope $ \as -> runReader (abstract b) (zip xs as))
+clauseHelper p xs b = Clause p (Scope xs $ \as -> runReader (abstract b) (zip xs as))
 
 instance Abstract String Type Type where
   abstract (Meta i)
@@ -69,7 +69,7 @@ instance Abstract String Type Type where
     = Forall <$> abstractScope sc
 
 forallHelper :: String -> Type -> Type
-forallHelper x b = Forall (Scope $ \[a] -> runReader (abstract b) [(x,a)])
+forallHelper x b = Forall (Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
 
 
 

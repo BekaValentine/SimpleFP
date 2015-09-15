@@ -6,7 +6,6 @@
 
 module Poly.Core.Type where
 
-import Control.Monad.State
 import Data.List (intercalate)
 
 import Parens
@@ -36,11 +35,6 @@ instance Show TyVariable where
   show (TyName x)      = x
   show (TyGenerated i) = "_" ++ show i
 
-next :: State Int Int
-next = do i <- get
-          put (i+1)
-          return i
-
 data TypeParenLoc = TyConArg | FunLeft | FunRight | ForallBody
   deriving (Eq)
 
@@ -53,25 +47,23 @@ instance ParenLoc Type where
   parenLoc (TyVar _)    = [TyConArg,FunLeft,FunRight,ForallBody]
   parenLoc (Forall _)   = [FunRight,ForallBody]
 
-instance ParenRec (State Int) Type where
+instance ParenRec Type where
   parenRec (Meta i)
-    = return $ "?" ++ show i
+    = "?" ++ show i
   parenRec (TyCon n [])
-    = return n
+    = n
   parenRec (TyCon n as)
-    = do as' <- mapM (parenthesize (Just TyConArg)) as
-         return $ n ++ " " ++ intercalate " " as'
+    = n ++ " " ++ intercalate " " (map (parenthesize (Just TyConArg)) as)
   parenRec (Fun a b)
-    = do a' <- parenthesize (Just FunLeft) a
-         b' <- parenthesize (Just FunRight) b
-         return $ a' ++ " -> " ++ b'
+    = parenthesize (Just FunLeft) a
+   ++ " -> "
+   ++ parenthesize (Just FunRight) b
   parenRec (TyVar n)
-    = return $ show n
+    = show n
   parenRec (Forall sc)
-    = do i <- next
-         b' <- parenthesize (Just ForallBody)
-                 (instantiate sc [TyVar (TyGenerated i)])
-         return $ "forall " ++ show i ++ ". " ++ b'
+    = "forall " ++ unwords (names sc) ++ ". "
+   ++ parenthesize (Just ForallBody)
+        (instantiate sc [ TyVar (TyName x) | x <- names sc ])
 
 instance Show Type where
-  show t = fst (runState (parenRec t) (0 :: Int))
+  show t = parenthesize Nothing t
