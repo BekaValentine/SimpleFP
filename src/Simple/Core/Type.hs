@@ -1,10 +1,7 @@
 {-# OPTIONS -Wall #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Simple.Core.Type where
-
-import Control.Monad.Identity
 
 import Parens
 
@@ -29,22 +26,11 @@ instance ParenLoc Type where
   parenLoc (TyCon _) = [FunLeft,FunRight]
   parenLoc (Fun _ _) = [FunRight]
 
-instance ParenRec Identity Type where
-  parenRec (TyCon c) = Identity c
-  parenRec (Fun a b) = let Identity sa = parenthesize (Just FunLeft) a
-                           Identity sb = parenthesize (Just FunRight) b
-                       in Identity (sa ++ " -> " ++ sb)
+instance ParenRec Type where
+  parenRec (TyCon c) = c
+  parenRec (Fun a b) = parenthesize (Just FunLeft) a
+                    ++ " -> "
+                    ++ parenthesize (Just FunRight) b
 
 instance Show Type where
-  show t = runIdentity (parenthesize Nothing t)
-    {-
-    aux RootType t
-    where
-      aux c t
-        = let (cs, str) = case t of
-                TyCon n -> ([RootType,FunLeft,FunRight], n)
-                Fun a b -> ([RootType,FunRight], aux FunLeft a ++ " -> " ++ aux FunRight b)
-          in if c `elem` cs
-             then str
-             else "(" ++ str ++ ")"
-             -}
+  show t = parenthesize Nothing t
