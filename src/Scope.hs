@@ -5,12 +5,12 @@ import Control.Monad.Reader
 import Abs
 
 data Scope s a
-  = Scope { instantiate :: [s] -> a }
+  = Scope { names :: [String], instantiate :: [s] -> a }
 
 abstractScope :: Abstract i e a => Scope s a -> Abstracted i e (Scope s a)
-abstractScope (Scope f)
+abstractScope (Scope ns f)
   = reader $ \e ->
-      Scope $ \vs' -> runReader (abstract (f vs')) e
+      Scope ns $ \vs' -> runReader (abstract (f vs')) e
 
 instance Functor (Scope s) where
-  fmap f (Scope b) = Scope (f . b)
+  fmap f (Scope ns b) = Scope ns (f . b)
