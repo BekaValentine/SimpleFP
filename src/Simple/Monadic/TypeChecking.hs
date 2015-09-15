@@ -188,13 +188,13 @@ check (Lam sc)    t = case t of
                                 extendContext [(i,arg)]
                                   $ check (instantiate sc [Var (Generated i)]) ret
                         _ -> failure
-check (App f a)   t = do Fun arg ret <- infer f
-                         guard $ ret == t
-                         check a arg
+check (App f a)   t = do t' <- infer (App f a)
+                         guard $ t == t'
 check (Con c as)  t = do t' <- infer (Con c as)
                          guard $ t == t'
-check (Case m cs) t = do t' <- infer m
-                         checkClauses t' cs t
+check (Case m cs) t = do t' <- infer (Case m cs)
+                         guard $ t == t'
+
 
 
 checkPattern :: Pattern -> Type -> TypeChecker Context
@@ -207,13 +207,3 @@ checkPattern (ConPat c ps) t
             && t == ret
        rss <- zipWithM checkPattern ps args
        return $ concat rss
-
-
-checkClauses :: Type -> [Clause] -> Type -> TypeChecker ()
-checkClauses patTy [] t = return ()
-checkClauses patTy (Clause p sc:cs) t
-  = do ctx' <- checkPattern p patTy
-       let xs = [ Var (Generated i) | (i,_) <- ctx' ]
-       extendContext ctx'
-         $ check (instantiate sc xs) t
-       checkClauses patTy cs t

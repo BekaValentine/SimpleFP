@@ -326,16 +326,14 @@ checkify (Lam sc) (PFun arg ret)
        extendContext [(i,arg)]
          $ checkify (instantiate sc [Var (Generated i)]) ret
 checkify (App f a) t
-  = do arg <- newMetaVar
-       checkify f (PFun arg t)
-       subs <- substitution
-       checkify a (instantiateMetas subs arg)
+  = do t' <- inferify (App f a)
+       unify t t'
 checkify (Con c as) t
   = do t' <- inferify (Con c as)
        unify t t'
 checkify (Case m cs) t
-  = do t' <- inferify m
-       checkifyClauses t' cs t
+  = do t' <- inferify (Case m cs)
+       unify t t'
 checkify _ _
   = failure
 
@@ -352,16 +350,6 @@ checkifyPattern (ConPat c ps) t
        subs <- substitution
        rss <- zipWithM checkifyPattern ps (map (instantiateMetas subs) args')
        return $ concat rss
-
-checkifyClauses :: PatternType -> [Clause] -> PatternType -> TypeChecker ()
-checkifyClauses patTy [] t = return ()
-checkifyClauses patTy (Clause p sc:cs) t
-  = do ctx' <- checkifyPattern p patTy
-       let xs = [ Var (Generated i) | (i,_) <- ctx' ]
-       ctx <- context
-       extendContext ctx'
-         $ checkify (instantiate sc xs) t
-       checkifyClauses patTy cs t
 
 
 
