@@ -53,25 +53,13 @@ instance ParenLoc Pattern where
   parenLoc (ConPat _ _)  = []
 
 instance ParenBound Pattern where
-  parenBound p0 ns = fst (go p0 ns)
-    where
-      go :: Pattern -> [String] -> (String,[String])
-      go VarPat [] = undefined
-      go VarPat (x:xs)
-        = (x,xs)
-      go (ConPat c []) xs
-        = (c,xs)
-      go (ConPat c ps) xs
-        = let (ps',xs') = goMulti ps xs
-          in (c ++ " " ++ ps', xs')
-      
-      goMulti [] _ = undefined
-      goMulti [p] xs
-        = go p xs
-      goMulti (p:ps) xs
-        = let (p',xs') = go p xs
-              (ps',xs'') = goMulti ps xs'
-          in (p' ++ " " ++ ps', xs'')
+  parenBound VarPat
+    = nextName
+  parenBound (ConPat c [])
+    = return c
+  parenBound (ConPat c ps)
+    = do ps' <- mapM (parenthesizeBound (Just ConPatArg)) ps
+         return $ c ++ " " ++ unwords ps'
 
 
 data TermParenLoc = RootTerm | AnnLeft | LamBody | AppLeft | AppRight | ConArg | CaseArg
@@ -116,7 +104,7 @@ instance ParenRec Term where
    ++ intercalate " | " (map auxClause cs) ++ " end"
     where
       auxClause (Clause p sc)
-        = parenthesizeBound Nothing p (names sc) ++ " -> "
+        = parenthesizeBoundAtNames Nothing p (names sc) ++ " -> "
        ++ parenthesize Nothing (instantiate sc [ Var (Name x) | x <- names sc ])
 
 instance Show Term where
