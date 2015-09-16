@@ -1,4 +1,4 @@
-module Simple.Constraint.Elaboration where
+module Simple.Unification.Elaboration where
 
 import Control.Monad (when,unless)
 import Control.Monad.Trans.State
@@ -9,7 +9,7 @@ import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Program
 
-import Simple.Constraint.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
+import Simple.Unification.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
 
 
 type Elaborator a = StateT (Signature,Definitions,Context) (Either String) a

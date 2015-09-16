@@ -2,7 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Poly.Constraint.Elaboration where
+module Poly.Unification.Elaboration where
 
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad (when,unless)
@@ -17,7 +17,7 @@ import Poly.Core.Term
 import Poly.Core.Type
 import Poly.Core.Program
 
-import Poly.Constraint.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
+import Poly.Unification.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
 
 
 type Elaborator a = StateT (Signature,Definitions,Context) (Either String) a

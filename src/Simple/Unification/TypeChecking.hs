@@ -1,6 +1,6 @@
 {-# LANGUAGE RecursiveDo #-}
 
-module Simple.Constraint.TypeChecking where
+module Simple.Unification.TypeChecking where
 
 import System.IO.Unsafe
 

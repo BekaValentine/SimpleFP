@@ -1,12 +1,12 @@
-module Simple.Constraint.REPL where
+module Simple.Unification.REPL where
 
 import Control.Monad.Reader
 import System.IO
 
 import Env
 import Eval
-import Simple.Constraint.Elaboration
-import Simple.Constraint.TypeChecking
+import Simple.Unification.Elaboration
+import Simple.Unification.TypeChecking
 import Simple.Core.Evaluation
 import Simple.Core.Parser
 import Simple.Core.Term

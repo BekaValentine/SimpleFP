@@ -1,12 +1,12 @@
-module Poly.Constraint.REPL where
+module Poly.Unification.REPL where
 
 import Control.Monad.Reader
 import System.IO
 
 import Env
 import Eval
-import Poly.Constraint.Elaboration
-import Poly.Constraint.TypeChecking
+import Poly.Unification.Elaboration
+import Poly.Unification.TypeChecking
 import Poly.Core.Evaluation
 import Poly.Core.Parser
 import Poly.Core.Term

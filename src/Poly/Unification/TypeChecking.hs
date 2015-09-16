@@ -1,7 +1,7 @@
 {-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS -Wall #-}
 
-module Poly.Constraint.TypeChecking where
+module Poly.Unification.TypeChecking where
 
 import Control.Applicative ((<$>))
 import Control.Monad (guard,zipWithM,replicateM)
