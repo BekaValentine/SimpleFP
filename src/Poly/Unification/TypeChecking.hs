@@ -1,4 +1,3 @@
-{-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS -Wall #-}
 
 module Poly.Unification.TypeChecking where
@@ -7,7 +6,6 @@ import Control.Applicative ((<$>))
 import Control.Monad (guard,zipWithM,replicateM)
 import Control.Monad.Trans.State
 import Data.List (intercalate,nubBy,find)
-import Data.Maybe (fromMaybe)
 
 import Scope
 import Poly.Core.Term
@@ -16,15 +14,9 @@ import Poly.Core.Type
 
 
 
-freshen :: [String] -> String -> String
-freshen xs x
-  | x `elem` xs = freshen xs (x ++ "'")
-  | otherwise   = x
-
-
 -- Signatures
 
--- params, arg types, return type
+-- argnum, Params -> ([Arg],Ret)
 data ConSig = ConSig Int (Scope Type ([Type],Type))
 
 instance Show ConSig where

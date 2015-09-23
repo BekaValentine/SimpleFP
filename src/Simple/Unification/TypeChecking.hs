@@ -1,5 +1,3 @@
-{-# LANGUAGE RecursiveDo #-}
-
 module Simple.Unification.TypeChecking where
 
 import System.IO.Unsafe

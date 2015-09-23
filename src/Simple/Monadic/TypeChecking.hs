@@ -1,5 +1,3 @@
-{-# LANGUAGE RecursiveDo #-}
-
 module Simple.Monadic.TypeChecking where
 
 import Control.Applicative ((<$>))

@@ -20,8 +20,8 @@ library
                        Simple.Unification.REPL,
                        Poly.Unification.REPL
                        
-  -- other-modules:       
-  other-extensions:    RecursiveDo
+  -- other-modules:
+  -- other-extensions:
   build-depends:       base >=4.7 && <4.8,
                        containers,
                        mtl,
