@@ -194,8 +194,8 @@ check (App f a) t
   = do t' <- infer (App f a)
        guard $ t == t'
 check (Con c as) t
- = do t' <- infer (Con c as)
-      guard $ t == t'
+  = do t' <- infer (Con c as)
+       guard $ t == t'
 check (Case m cs) t
   = do t' <- infer (Case m cs)
        guard $ t == t'
