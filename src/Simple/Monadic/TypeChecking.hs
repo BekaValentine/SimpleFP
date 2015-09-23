@@ -1,16 +1,15 @@
+{-# OPTIONS -Wall #-}
+
 module Simple.Monadic.TypeChecking where
 
 import Control.Applicative ((<$>))
-import Control.Monad (guard)
 import Control.Monad.State
-import Data.List (intercalate,nub,find)
+import Data.List (intercalate,find)
 
 import Env
-import Eval
 import Scope
 import Simple.Core.Term
 import Simple.Core.Type
-import Simple.Core.Evaluation
 
 
 
@@ -146,7 +145,7 @@ infer (Var (Generated i))
   = typeInContext i
 infer (Ann m t)
   = check m t >> return t
-infer (Lam sc)
+infer (Lam _)
   = failure
 infer (App f a)
   = do Fun arg ret <- infer f
@@ -166,14 +165,13 @@ inferClause :: Type -> Clause -> TypeChecker Type
 inferClause patTy (Clause p sc)
   = do ctx' <- checkPattern p patTy
        let xs = [ Var (Generated i) | (i,_) <- ctx' ]
-       ctx <- context
        extendContext ctx'
          $ infer (instantiate sc xs)
 
 inferClauses :: Type -> [Clause] -> TypeChecker Type
 inferClauses patTy cs = do ts <- sequence $ map (inferClause patTy) cs
                            case ts of
-                             t:ts | all (== t) ts
+                             t:ts' | all (== t) ts'
                                -> return t
                              _ -> failure
 
