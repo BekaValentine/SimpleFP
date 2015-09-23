@@ -133,6 +133,7 @@ typeInContext i
 isType :: Type -> TypeChecker ()
 isType (TyCon tc) = tyconExists tc
 isType (Fun a b)  = isType a >> isType b
+isType (Meta _)   = error "Meta variables should not be present in the this type checker."
 
 
 

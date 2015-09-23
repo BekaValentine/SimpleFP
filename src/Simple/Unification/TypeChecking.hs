@@ -40,25 +40,6 @@ lookupSignature c (Signature _ consigs) = lookup c consigs
 
 
 
--- Pattern Types
- 
-data PatternType
-  = PTyCon String
-  | PFun PatternType PatternType
-  | PMeta Int
-  deriving (Eq,Show)
-
-typeToPatternType :: Type -> PatternType
-typeToPatternType (TyCon tycon) = PTyCon tycon
-typeToPatternType (Fun a b)     = PFun (typeToPatternType a) (typeToPatternType b)
-
-patternTypeToType :: PatternType -> Type
-patternTypeToType (PTyCon tycon) = TyCon tycon
-patternTypeToType (PFun a b)     = Fun (patternTypeToType a) (patternTypeToType b)
-patternTypeToType (PMeta _)      = error "Cannot convert metavars to types."
-
-
-
 -- Definitions
 
 type Definitions = [(String,Term,Type)]
@@ -68,37 +49,30 @@ type Definitions = [(String,Term,Type)]
 
 type Context = [(Int,Type)]
 
-type PatternContext = [(Int,PatternType)]
-
-patternContextToContext :: PatternContext -> Context
-patternContextToContext = map (\(x,y) -> (x,patternTypeToType y))
-
-contextToPatternContext :: Context -> PatternContext
-contextToPatternContext = map (\(x,y) -> (x,typeToPatternType y))
 
 
 
 -- Unifying Type Checkers
 
-data Equation = Equation PatternType PatternType
+data Equation = Equation Type Type
 
 type MetaVar = Int
 
-type Substitution = [(MetaVar,PatternType)]
+type Substitution = [(MetaVar,Type)]
 
 data TCState
   = TCState
     { tcSig :: Signature
     , tcDefs :: Definitions
-    , tcCtx :: PatternContext
+    , tcCtx :: Context
     , tcNextName :: Int
     , tcNextMeta :: MetaVar
-    , tcSubs :: [(MetaVar,PatternType)]
+    , tcSubs :: Substitution
     }
 
 type TypeChecker a = StateT TCState Maybe a
 
-runTypeChecker :: TypeChecker a -> Signature -> Definitions -> PatternContext -> Maybe a
+runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Maybe a
 runTypeChecker checker sig defs ctx
   = fmap fst (runStateT checker (TCState sig defs ctx 0 0 []))
       
@@ -116,10 +90,10 @@ putDefinitions :: Definitions -> TypeChecker ()
 putDefinitions defs = do s <- get
                          put (s { tcDefs = defs })
 
-context :: TypeChecker PatternContext
+context :: TypeChecker Context
 context = tcCtx <$> get
 
-putContext :: PatternContext -> TypeChecker ()
+putContext :: Context -> TypeChecker ()
 putContext ctx = do s <- get
                     put (s { tcCtx = ctx })
 
@@ -131,7 +105,7 @@ extendDefinitions edefs tc
        putDefinitions defs
        return x
 
-extendContext :: PatternContext -> TypeChecker a -> TypeChecker a
+extendContext :: Context -> TypeChecker a -> TypeChecker a
 extendContext ectx tc
   = do ctx <- context
        putContext (ectx++ctx)
@@ -144,10 +118,10 @@ newName = do s <- get
              put (s { tcNextName = 1 + tcNextName s })
              return $ tcNextName s
 
-newMetaVar :: TypeChecker PatternType
+newMetaVar :: TypeChecker Type
 newMetaVar = do s <- get
                 put (s { tcNextMeta = 1 + tcNextMeta s })
-                return $ PMeta (tcNextMeta s)
+                return $ Meta (tcNextMeta s)
 
 substitution :: TypeChecker Substitution
 substitution = tcSubs <$> get
@@ -156,26 +130,26 @@ putSubstitution :: Substitution -> TypeChecker ()
 putSubstitution subs = do s <- get
                           put (s { tcSubs = subs })
 
-occurs :: MetaVar -> PatternType -> Bool
-occurs x (PTyCon _) = False
-occurs x (PFun a b) = occurs x a || occurs x b
-occurs x (PMeta y)  = x == y
+occurs :: MetaVar -> Type -> Bool
+occurs x (TyCon _) = False
+occurs x (Fun a b) = occurs x a || occurs x b
+occurs x (Meta y)  = x == y
 
 
 solve :: [Equation] -> Maybe Substitution
 solve eqs = go eqs []
   where
     go [] subs' = return subs'
-    go (Equation (PMeta x) t2 : eqs) subs'
+    go (Equation (Meta x) t2 : eqs) subs'
       = do guard (not (occurs x t2))
            go eqs ((x,t2):subs')
-    go (Equation t1 (PMeta y) : eqs) subs'
+    go (Equation t1 (Meta y) : eqs) subs'
       = do guard (not (occurs y t1))
            go eqs ((y,t1):subs')
-    go (Equation (PTyCon tycon1) (PTyCon tycon2) : eqs) subs'
+    go (Equation (TyCon tycon1) (TyCon tycon2) : eqs) subs'
       = do guard (tycon1 == tycon2)
            go eqs subs'
-    go (Equation (PFun a1 b1) (PFun a2 b2) : eqs) subs'
+    go (Equation (Fun a1 b1) (Fun a2 b2) : eqs) subs'
       = go (Equation a1 a2 : Equation b1 b2 : eqs) subs'
     go _ _ = Nothing
 
@@ -198,30 +172,30 @@ addSubstitutions subs'
            putContext (map (\(x,t) -> (x,instantiateMetas subs2 t)) ctx)
 
 
-unify :: PatternType -> PatternType -> TypeChecker ()
+unify :: Type -> Type -> TypeChecker ()
 unify p q = case solve [Equation p q] of
               Nothing    -> failure
               Just subs' -> addSubstitutions subs'
 
-instantiateMetas :: Substitution -> PatternType -> PatternType
-instantiateMetas _ (PTyCon tycon)
-  = PTyCon tycon
-instantiateMetas subs (PFun a b)
-  = PFun (instantiateMetas subs a) (instantiateMetas subs b)
-instantiateMetas subs (PMeta i)
+instantiateMetas :: Substitution -> Type -> Type
+instantiateMetas _ (TyCon tycon)
+  = TyCon tycon
+instantiateMetas subs (Fun a b)
+  = Fun (instantiateMetas subs a) (instantiateMetas subs b)
+instantiateMetas subs (Meta i)
   = case lookup i subs of
-      Nothing -> PMeta i
+      Nothing -> Meta i
       Just t  -> instantiateMetas subs t
 
 
 
-typeInDefinitions :: String -> TypeChecker PatternType
+typeInDefinitions :: String -> TypeChecker Type
 typeInDefinitions n = do defs <- definitions
                          case find (\(n',_,_) -> n' == n) defs of
                            Nothing      -> failure
-                           Just (_,_,t) -> return (typeToPatternType t)
+                           Just (_,_,t) -> return t
 
-typeInContext :: Int -> TypeChecker PatternType
+typeInContext :: Int -> TypeChecker Type
 typeInContext i = do ctx <- context
                      case lookup i ctx of
                        Nothing -> failure
@@ -249,35 +223,32 @@ isType (Fun a b)  = isType a >> isType b
 
 -- Type Inference
 
-inferify :: Term -> TypeChecker PatternType
+inferify :: Term -> TypeChecker Type
 inferify (Var (Name x))
   = typeInDefinitions x
 inferify (Var (Generated i))
   = typeInContext i
 inferify (Ann m t)
-  = do let pt = typeToPatternType t
-       checkify m pt
-       return pt
+  = do checkify m t
+       return t
 inferify (Lam sc)
   = do i <- newName
        arg <- newMetaVar
        ret <- extendContext [(i,arg)]
                 $ inferify (instantiate sc [Var (Generated i)])
        subs <- substitution
-       return $ PFun (instantiateMetas subs arg) ret
+       return $ Fun (instantiateMetas subs arg) ret
 inferify (App f a)
-  = do PFun arg ret <- inferify f
+  = do Fun arg ret <- inferify f
        checkify a arg
        return ret
 inferify (Con c as)
   = do ConSig args ret <- typeInSignature c
-       let args' = map typeToPatternType args
-           ret' = typeToPatternType ret
-       guard $ length as == length args'
-       checkifyMulti as args'
-       return ret'
+       guard $ length as == length args
+       checkifyMulti as args
+       return ret
   where
-    checkifyMulti :: [Term] -> [PatternType] -> TypeChecker ()
+    checkifyMulti :: [Term] -> [Type] -> TypeChecker ()
     checkifyMulti []     []     = return ()
     checkifyMulti (m:ms) (t:ts) = do subs <- substitution
                                      checkify m (instantiateMetas subs t)
@@ -287,7 +258,7 @@ inferify (Case m cs)
   = do t <- inferify m
        inferifyClauses t cs
 
-inferifyClause :: PatternType -> Clause -> TypeChecker PatternType
+inferifyClause :: Type -> Clause -> TypeChecker Type
 inferifyClause patTy (Clause p sc)
   = do ctx' <- checkifyPattern p patTy
        let xs = [ Var (Generated i) | (i,_) <- ctx' ]
@@ -296,7 +267,7 @@ inferifyClause patTy (Clause p sc)
          $ inferify (instantiate sc xs)
 
 
-inferifyClauses :: PatternType -> [Clause] -> TypeChecker PatternType
+inferifyClauses :: Type -> [Clause] -> TypeChecker Type
 inferifyClauses patTy cs
   = do ts <- sequence $ map (inferifyClause patTy) cs
        case ts of
@@ -310,16 +281,15 @@ inferifyClauses patTy cs
 
 -- Type Checking
 
-checkify :: Term -> PatternType -> TypeChecker ()
+checkify :: Term -> Type -> TypeChecker ()
 checkify (Var x) t
   = do t' <- inferify (Var x)
        unify t t'
 checkify (Ann m t') t
-  = do let pt' = typeToPatternType t'
-       unify t pt'
+  = do unify t t'
        subs <- substitution
-       checkify m (instantiateMetas subs pt')
-checkify (Lam sc) (PFun arg ret)
+       checkify m (instantiateMetas subs t')
+checkify (Lam sc) (Fun arg ret)
   = do i <- newName
        extendContext [(i,arg)]
          $ checkify (instantiate sc [Var (Generated i)]) ret
@@ -335,18 +305,16 @@ checkify (Case m cs) t
 checkify _ _
   = failure
 
-checkifyPattern :: Pattern -> PatternType -> TypeChecker PatternContext
+checkifyPattern :: Pattern -> Type -> TypeChecker Context
 checkifyPattern VarPat t
   = do i <- newName
        return [(i,t)]
 checkifyPattern (ConPat c ps) t
   = do ConSig args ret <- typeInSignature c
-       let args' = map typeToPatternType args
-           ret' = typeToPatternType ret
-       guard $ length ps == length args'
-       unify t ret'
+       guard $ length ps == length args
+       unify t ret
        subs <- substitution
-       rss <- zipWithM checkifyPattern ps (map (instantiateMetas subs) args')
+       rss <- zipWithM checkifyPattern ps (map (instantiateMetas subs) args)
        return $ concat rss
 
 
@@ -358,11 +326,11 @@ metasSolved :: TypeChecker ()
 metasSolved = do s <- get
                  guard $ tcNextMeta s == length (tcSubs s)
 
-check :: Term -> PatternType -> TypeChecker ()
+check :: Term -> Type -> TypeChecker ()
 check m t = do checkify m t
                metasSolved
                 
-infer :: Term -> TypeChecker PatternType
+infer :: Term -> TypeChecker Type
 infer m = do t <- inferify m
              metasSolved
              subs <- substitution

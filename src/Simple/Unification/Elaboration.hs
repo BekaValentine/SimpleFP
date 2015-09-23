@@ -44,13 +44,13 @@ putContext ctx = do (sig,defs,_) <- get
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
 when' tc e = do (sig,defs,ctx) <- get
-                case runTypeChecker tc sig defs (contextToPatternContext ctx) of
+                case runTypeChecker tc sig defs ctx of
                   Nothing -> return ()
                   Just _  -> e
 
 unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
 unless' tc e = do (sig,defs,ctx) <- get
-                  case runTypeChecker tc sig defs (contextToPatternContext ctx) of
+                  case runTypeChecker tc sig defs ctx of
                     Nothing -> e
                     Just _  -> return ()
 
@@ -73,12 +73,11 @@ addConstructor tycon n args
 
 elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
-  = do let ty' = typeToPatternType ty
-       when' (typeInDefinitions n)
+  = do when' (typeInDefinitions n)
            $ fail ("Term already defined: " ++ n)
        unless' (isType ty)
              $ fail ("Invalid type: " ++ show ty)
-       unless' (extendDefinitions [(n,def,ty)] (check def ty'))
+       unless' (extendDefinitions [(n,def,ty)] (check def ty))
              $ fail ("Definition value does not type check." ++
                      "\n  Term: " ++ show def ++
                      "\n  Expected type: " ++ show ty)

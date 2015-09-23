@@ -43,7 +43,7 @@ repl src = case loadProgram src of
     loadTerm :: Signature -> Definitions -> Context -> Environment String Term -> String -> Either String Term
     loadTerm sig defs ctx env src
       = do tm <- parseTerm src
-           case runTypeChecker (infer tm) sig defs (contextToPatternContext ctx) of
+           case runTypeChecker (infer tm) sig defs ctx of
              Nothing -> Left "Unable to infer type."
              Just _ -> runReaderT (eval tm) env
     
