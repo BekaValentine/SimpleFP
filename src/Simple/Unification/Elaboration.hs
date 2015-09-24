@@ -1,5 +1,6 @@
 module Simple.Unification.Elaboration where
 
+import Control.Applicative ((<$>))
 import Control.Monad (when,unless)
 import Control.Monad.Trans.State
 import Data.List (intercalate)
@@ -12,44 +13,48 @@ import Simple.Core.Program
 import Simple.Unification.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
 
 
-type Elaborator a = StateT (Signature,Definitions,Context) (Either String) a
+data ElabState
+  = ElabState
+    { elabSig :: Signature
+    , elabDefs :: Definitions
+    , elabCtx :: Context
+    }
 
-runElaborator :: Elaborator () -> Either String (Signature,Definitions,Context)
-runElaborator elab = do (_,p) <- runStateT elab (Signature [] [],[],[])
+type Elaborator a = StateT ElabState (Either String) a
+
+runElaborator :: Elaborator () -> Either String ElabState
+runElaborator elab = do (_,p) <- runStateT elab (ElabState (Signature [] []) [] [])
                         return p
 
 signature :: Elaborator Signature
-signature = do (sig,_,_) <- get
-               return sig
+signature = elabSig <$> get
 
 definitions :: Elaborator Definitions
-definitions = do (_,defs,_) <- get
-                 return defs
+definitions = elabDefs <$> get
 
 context :: Elaborator Context
-context = do (_,_,ctx) <- get
-             return ctx
+context = do elabCtx <$> get
 
 putSignature :: Signature -> Elaborator ()
-putSignature sig = do (_,defs,ctx) <- get
-                      put (sig,defs,ctx)
+putSignature sig = do s <- get
+                      put (s { elabSig = sig})
 
 putDefinitions :: Definitions -> Elaborator ()
-putDefinitions defs = do (sig,_,ctx) <- get
-                         put (sig,defs,ctx)
+putDefinitions defs = do s <- get
+                         put (s { elabDefs = defs})
 
 putContext :: Context -> Elaborator ()
-putContext ctx = do (sig,defs,_) <- get
-                    put (sig,defs,ctx)
+putContext ctx = do s <- get
+                    put (s { elabCtx = ctx })
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
-when' tc e = do (sig,defs,ctx) <- get
+when' tc e = do ElabState sig defs ctx <- get
                 case runTypeChecker tc sig defs ctx of
                   Nothing -> return ()
                   Just _  -> e
 
 unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
-unless' tc e = do (sig,defs,ctx) <- get
+unless' tc e = do ElabState sig defs ctx <- get
                   case runTypeChecker tc sig defs ctx of
                     Nothing -> e
                     Just _  -> return ()
