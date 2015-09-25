@@ -4,7 +4,7 @@ module Poly.Unification.TypeChecking where
 
 import Control.Applicative ((<$>))
 import Control.Monad (guard,zipWithM,replicateM)
-import Control.Monad.Trans.State
+import Control.Monad.State
 import Data.List (intercalate,nubBy,find)
 
 import Scope

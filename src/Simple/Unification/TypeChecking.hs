@@ -4,7 +4,7 @@ import System.IO.Unsafe
 
 import Control.Applicative ((<$>))
 import Control.Monad (guard,forM,zipWithM)
-import Control.Monad.Trans.State
+import Control.Monad.State
 import Data.List (intercalate,nubBy,find)
 import Data.Maybe (fromMaybe,fromJust)
 

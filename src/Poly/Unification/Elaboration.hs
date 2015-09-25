@@ -7,7 +7,7 @@ module Poly.Unification.Elaboration where
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad (when,unless)
 import Control.Monad.Reader
-import Control.Monad.Trans.State
+import Control.Monad.State
 import Data.List (intercalate)
 import Data.Maybe (isJust)
 
