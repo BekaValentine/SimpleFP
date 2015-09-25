@@ -94,7 +94,7 @@ elabAlt :: String -> String -> [Type] -> Elaborator ()
 elabAlt tycon n args
   = do when' (typeInSignature n)
            $ fail ("Constructor already declared: " ++ n)
-       unless' (sequence_ (map isType args))
+       unless' (mapM_ isType args)
              $ fail ("Invalid constructor signature: " ++
                      show (ConSig args (TyCon tycon)))
        addConstructor tycon n args

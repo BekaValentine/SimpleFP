@@ -155,7 +155,7 @@ infer (App f a)
 infer (Con c as)
   = do ConSig args ret <- typeInSignature c
        guard $ length as == length args
-       sequence_ (zipWith check as args)
+       zipWithM_ check as args
        return ret
 infer (Case m cs)
   = do t <- infer m
@@ -170,7 +170,7 @@ inferClause patTy (Clause p sc)
          $ infer (instantiate sc xs)
 
 inferClauses :: Type -> [Clause] -> TypeChecker Type
-inferClauses patTy cs = do ts <- sequence $ map (inferClause patTy) cs
+inferClauses patTy cs = do ts <- mapM (inferClause patTy) cs
                            case ts of
                              t:ts' | all (== t) ts'
                                -> return t

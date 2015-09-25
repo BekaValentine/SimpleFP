@@ -269,10 +269,10 @@ inferifyClause patTy (Clause p sc)
 
 inferifyClauses :: Type -> [Clause] -> TypeChecker Type
 inferifyClauses patTy cs
-  = do ts <- sequence $ map (inferifyClause patTy) cs
+  = do ts <- mapM (inferifyClause patTy) cs
        case ts of
          t:ts -> do
-           sequence_ (map (unify t) ts)
+           mapM_ (unify t) ts
            subs <- substitution
            return (instantiateMetas subs t)
          _ -> failure

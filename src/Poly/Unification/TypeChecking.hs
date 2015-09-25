@@ -261,7 +261,7 @@ isType :: Type -> TypeChecker ()
 isType (Meta _)     = return ()
 isType (TyCon c as) = do n <- tyconExists c
                          guard $ n == length as
-                         sequence_ (map isType as)
+                         mapM_ isType as
 isType (Fun a b)    = isType a >> isType b
 isType (TyVar _)    = return ()
 isType (Forall sc)  = do i <- newName
@@ -339,10 +339,10 @@ inferifyClause patTy (Clause p sc)
 
 inferifyClauses :: Type -> [Clause] -> TypeChecker Type
 inferifyClauses patTy cs
-  = do ts <- sequence $ map (inferifyClause patTy) cs
+  = do ts <- mapM (inferifyClause patTy) cs
        case ts of
          t:ts' -> do
-           sequence_ (map (unify t) ts')
+           mapM_ (unify t) ts'
            subs <- substitution
            return $ instantiateMetas subs t
          _ -> failure

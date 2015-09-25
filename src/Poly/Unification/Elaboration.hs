@@ -123,7 +123,7 @@ elabAlt tycon params n args
            consig' = ConSig (length params) (Scope params $ \vs ->
                        let e = zip params vs
                        in (runReader args' e, runReader ret' e))
-       unless' (sequence_ (map isType args))
+       unless' (mapM_ isType args)
              $ fail ("Invalid constructor signature: " ++
                      show consig')
        addConstructor n consig'
