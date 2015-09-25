@@ -37,6 +37,8 @@ parenthesize :: (ParenLoc a, Eq (Loc a), ParenRec a) => Maybe (Loc a) -> a -> St
 parenthesize l x
   = let rec = parenRec x
     in case l of
+         Nothing
+           -> rec
          Just loc | loc `elem` parenLoc x
            -> rec
          _ -> "(" ++ rec ++ ")"
