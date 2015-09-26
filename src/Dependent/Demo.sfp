@@ -1,30 +1,50 @@
-data Nat : Type where
+data Unit where
+  | U : Unit
+end
+
+data Foo (u : Unit) where
+  | FooCon (u : Unit) : Foo u
+end
+
+let un : Unit
+  = case U || FooCon U
+    motive (u : Unit) || (f : Foo u) || Unit
+    of
+    | x || FooCon .x -> U
+    end
+end
+
+data Inv (a : Type) (b : Type) (f : (x : a) -> b) (y : b) where
+  | InvEl (a : Type) (b : Type) (f : (x : a) -> b) (x : a) : Inv a b f (f x)
+end
+
+data Bool where
+  | True : Bool
+  | False : Bool
+end
+
+let not : (b : Bool) -> Bool
+  = \b -> case b
+          motive (b' : Bool) || Bool
+          of
+           | True -> False
+           | False -> True
+          end
+end
+
+let ex : Inv Bool Bool not True
+  = InvEl Bool Bool not False
+end
+
+data Nat where
   | Zero : Nat
   | Suc (n : Nat) : Nat
 end
 
-data Vec (a : Type) (n : Nat) : Type where
-  | Nil (a : Type) : Vec a Zero
-  | Cons (a : Type) (n : Nat) (x : a) (xs : Vec a n) : Vec a (Suc n)
+let plusOne : (n : Nat) -> Nat
+  = \n -> Suc n
 end
 
-let vec : (a : Type) -> (n : Nat) -> (x : a) -> Vec a n
-  = \a -> \n -> \x ->
-      case n of
-        | Zero -> Nil a
-        | Suc n' -> Cons a n' x (vec a n' x)
-      end
-end
-
-data Fin (n : Nat) : Type where
-  | FZero (n : Nat) : Fin (Suc n)
-  | FSuc (n : Nat) (f : Fin n) : Fin (Suc n)
-end
-
-let lookup : (a : Type) -> (n : Nat) -> (xs : Vec a n) -> (f : Fin n) -> a
-  = \a -> \n -> \xs -> \f ->
-      case n || xs || f of
-        | Suc n' || Cons x xs' || FZero -> x
-        | Suc n' || Cons x xs' || FSuc f' -> lookup a n' xs' f'
-      end
+let ex2 : Inv Nat Nat (\n -> Suc n) (Suc Zero)
+  = InvEl Nat Nat plusOne Zero
 end

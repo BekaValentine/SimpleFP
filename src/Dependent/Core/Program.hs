@@ -4,6 +4,7 @@ module Dependent.Core.Program where
 
 import Data.List (intercalate)
 
+import Dependent.Core.ConSig
 import Dependent.Core.Term
 
 
@@ -22,19 +23,15 @@ instance Show TermDeclaration where
 -- Type Declarations
 
 data TypeDeclaration
-  = TypeDeclaration String [DeclArg] [(String,[DeclArg],Term)]
+  = TypeDeclaration String [DeclArg] [(String,ConSig Term)]
 
 instance Show TypeDeclaration where
   show (TypeDeclaration tycon tyargs [])
     = "data " ++ tycon ++ concat (map (\x -> " " ++ show x) tyargs) ++ " end"
   show (TypeDeclaration tycon tyargs alts)
     = "data " ++ tycon ++ concat (map (\x -> " " ++ show x) tyargs) ++ " where"
-   ++ concat [ "\n" ++ showAlt c as t | (c,as,t) <- alts ]
+   ++ concat [ "\n" ++ c ++ " : " ++ showConSig (Var . Name) sig | (c,sig) <- alts ]
    ++ "\nend"
-   where
-     showAlt :: String -> [DeclArg] -> Term -> String
-     showAlt c [] t = c ++ " : " ++ show t
-     showAlt c as t = c ++ " " ++ intercalate " " (map show as) ++ " : " ++ show t
 
 
 

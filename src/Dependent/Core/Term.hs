@@ -39,23 +39,23 @@ data Term
   | Lam (Scope Term Term)
   | App Term Term
   | Con String [Term]
-  | Case Term [Clause]
-  | Cases [Term] CasesArgType [SeqClause]
+  | Case [Term] CaseMotive [Clause]
+
+data CaseMotive
+  = CaseMotiveNil Term
+  | CaseMotiveCons Term (Scope Term CaseMotive)
 
 data Clause
-  = Clause Pattern (Scope Term Term)
-
-data CasesArgType
-  = CasesArgNil Term
-  | CasesArgCons Term (Scope Term CasesArgType)
-
-data SeqClause
-  = SeqClause [Pattern] (Scope Term Term)
+  = Clause PatternSeq (Scope Term Term)
 
 data Pattern
   = VarPat
-  | ConPat String [Pattern]
-  deriving (Eq)
+  | ConPat String PatternSeq
+  | AssertionPat Term
+
+data PatternSeq
+  = PatternSeqNil
+  | PatternSeqCons Pattern (Scope Term PatternSeq)
 
 
 
@@ -65,49 +65,58 @@ instance Show Variable where
   show (Name x) = x
   show (Generated i) = "_" ++ show i
 
-next :: State Int Int
-next = do i <- get
-          put (i+1)
-          return i
-
 data PatternParenLoc = ConPatArg
   deriving (Eq)
 
 instance ParenLoc Pattern where
   type Loc Pattern = PatternParenLoc
-  parenLoc VarPat        = [ConPatArg]
-  parenLoc (ConPat _ []) = [ConPatArg]
-  parenLoc (ConPat _ _)  = []
+  parenLoc VarPat           = [ConPatArg]
+  parenLoc (ConPat _ _)     = []
+  parenLoc (AssertionPat _) = [ConPatArg]
 
-instance ParenBound (State Int) Pattern where
+instance ParenBound Pattern where
   parenBound VarPat
-    = do i <- next
-         return (show (Generated i),[i])
-  parenBound (ConPat c [])
-    = return (c,[])
+    = nextName
   parenBound (ConPat c ps)
-    = do r <- mapM (parenthesizeBound (Just ConPatArg)) ps
-         let (ps',xs) = unzip r
-         return (c ++ " " ++ intercalate " " ps', concat xs)
+    = do mps' <- auxPatternSeq ps
+         case mps' of
+           Nothing  -> return c
+           Just ps' -> return $ c ++ " " ++ unwords ps'
+    where
+      auxPatternSeq :: PatternSeq -> State [String] (Maybe [String])
+      auxPatternSeq PatternSeqNil
+        = return Nothing
+      auxPatternSeq (PatternSeqCons p sc)
+        = do p' <- parenBound p
+             mps' <- auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
+             case mps' of
+               Nothing  -> return $ Just [p']
+               Just ps' -> return $ Just (p':ps')
+  parenBound (AssertionPat m)
+    = return $ "." ++ parenthesize (Just AssertionPatArg) m ++ ")"
+
+instance Show Pattern where
+  show p = parenthesizeBoundAtNames Nothing p ["a","b","c","d","e","f","g"]
+
 
 data TermParenLoc
   = RootTerm
   | AnnLeft | AnnRight
   | FunArg | FunRet
   | LamBody | AppLeft | AppRight
-  | ConArg
+  | ConArg | AssertionPatArg
   deriving (Eq)
 
 instance ParenLoc Term where
   type Loc Term = TermParenLoc
   parenLoc (Meta _)
-    = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg]
+    = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg,AssertionPatArg]
   parenLoc (Var _)
-    = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg]
+    = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg,AssertionPatArg]
   parenLoc (Ann _ _)
     = [FunArg,FunRet,LamBody]
   parenLoc Type
-    = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg]
+    = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,AppRight,ConArg,AssertionPatArg]
   parenLoc (Fun _ _)
     = [FunArg,FunRet,LamBody]
   parenLoc (Lam _)
@@ -115,80 +124,62 @@ instance ParenLoc Term where
   parenLoc (App _ _)
     = [FunArg,FunRet,AnnLeft,LamBody,AppLeft]
   parenLoc (Con _ [])
-    = [FunArg,FunRet,AnnLeft,LamBody,AppLeft,AppRight,ConArg]
+    = [FunArg,FunRet,AnnLeft,LamBody,AppLeft,AppRight,ConArg,AssertionPatArg]
   parenLoc (Con _ _)
     = [FunArg,FunRet,AnnLeft,LamBody]
-  parenLoc (Case _ _)
-    = [FunArg,FunRet,LamBody]
-  parenLoc (Cases _ _ _)
+  parenLoc (Case _ _ _)
     = [FunArg,FunRet,LamBody]
 
-instance ParenRec (State Int) Term where
+instance ParenRec Term where
   parenRec (Meta i)
-    = return $ "?" ++ show i
+    = "?" ++ show i
   parenRec (Var x)
-    = return $ show x
+    = show x
   parenRec (Ann m ty)
-    = do m' <- parenthesize (Just AnnLeft) m
-         ty' <- parenthesize (Just AnnRight) ty
-         return $ m' ++ " : " ++ ty'
+    = parenthesize (Just AnnLeft) m ++ " : " ++ parenthesize (Just AnnRight) ty
   parenRec Type
-    = return "Type"
+    = "Type"
   parenRec (Fun a sc)
-    = do i <- next
-         let x = Generated i
-         a' <- parenthesize (Just FunArg) a
-         b' <- parenthesize (Just FunRet) (instantiate sc [Var x])
-         return $ "(" ++ show x ++ " : " ++ a' ++ ") -> " ++ b'
+    = "(" ++ unwords (names sc) ++ " : " ++ parenthesize (Just FunArg) a
+   ++ ") -> " ++ parenthesize (Just FunRet)
+                   (instantiate sc [ Var (Name x) | x <- names sc ])
   parenRec (Lam sc)
-    = do i <- next
-         let x = Generated i
-         b' <- parenthesize (Just LamBody) (instantiate sc [Var x])
-         return $ "\\" ++ show x ++ " -> " ++ b'
+    = "\\" ++ unwords (names sc)
+   ++ " -> " ++ parenthesize (Just LamBody)
+                  (instantiate sc [ Var (Name x) | x <- names sc ])
   parenRec (App f a)
-    = do f' <- parenthesize (Just AppLeft) f
-         a' <- parenthesize (Just AppRight) a
-         return $ f' ++ " " ++ a'
+    = parenthesize (Just AppLeft) f ++ " " ++ parenthesize (Just AppRight) a
   parenRec (Con c [])
-    = return c
+    = c
   parenRec (Con c as)
-    = do as' <- mapM (parenthesize (Just ConArg)) as
-         return $ c ++ " " ++ intercalate " " as'
-  parenRec (Case m cs)
-    = do m' <- parenthesize Nothing m
-         cs' <- mapM auxClause cs
-         return $ "case " ++ m' ++ " of " ++ intercalate " | " cs' ++ " end"
+    = c ++ " " ++ intercalate " " (map (parenthesize (Just ConArg)) as)
+  parenRec (Case ms mot cs)
+    = "cases " ++ intercalate " || " (map (parenthesize Nothing) ms)
+   ++ " motive " ++ auxMotive mot
+   ++ " of " ++ intercalate " | " (map auxClause cs) ++ " end"
     where
-      auxClause (Clause p sc)
-        = do (pat,is) <- parenthesizeBound Nothing p
-             b' <- parenthesize Nothing
-                    (instantiate sc (map (Var . Generated) is))
-             return $ pat ++ " -> " ++ b'
-  parenRec (Cases ms ts cs)
-    = do ms' <- mapM (parenthesize Nothing) ms
-         let ms'' = intercalate " || " ms'
-         ts' <- auxArgType ts
-         cs' <- mapM auxClause cs
-         return $ "cases " ++ ms'' ++ " :: " ++ ts' ++ " of " ++ intercalate " | " cs' ++ "end"
-    where
-      auxArgType (CasesArgNil a)
+      auxMotive (CaseMotiveNil a)
         = parenthesize Nothing a
-      auxArgType (CasesArgCons a sc)
-        = do a' <- parenthesize Nothing a
-             i <- next
-             let x = Generated i
-             b' <- auxArgType (instantiate sc [Var x])
-             return $ "(" ++ show x ++ " : " ++ a' ++ ") || " ++ b'
+      auxMotive (CaseMotiveCons a sc)
+        = "(" ++ unwords (names sc) ++ " : "
+       ++ parenthesize Nothing a ++ ") || "
+       ++ auxMotive (instantiate sc [ Var (Name x) | x <- names sc ])
       
-      auxClause (SeqClause ps sc)
-        = do ps' <- mapM (parenthesizeBound Nothing) ps
-             let (pats,iss) = unzip ps'
-                 patseq = intercalate " || " pats
-                 is = map (Var . Generated) (concat iss)
-             b' <- parenthesize Nothing (instantiate sc is)
-             return $ patseq ++ " -> " ++ b'
+      auxClause (Clause ps sc)
+        = let (ps',_) = runState (auxPatternSeq ps) (names sc)
+          in intercalate " || " ps'
+          ++ " -> " ++ parenthesize Nothing
+                         (instantiate sc [ Var (Name x) | x <- names sc ])
+      
+      auxPatternSeq :: PatternSeq -> State [String] [String]
+      auxPatternSeq PatternSeqNil
+        = return []
+      auxPatternSeq (PatternSeqCons p sc)
+        = do p' <- parenBound p
+             ps' <- auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
+             return (p':ps')
       
 
 
 instance Show Term where
-  show t = fst (runState (parenthesize Nothing t) (0 :: Int))
+  show t = parenthesize Nothing t

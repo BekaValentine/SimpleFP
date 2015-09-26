@@ -12,67 +12,10 @@ import qualified Text.Parsec.Token as Token
 
 import Abs
 import Scope
+import Dependent.Core.Abstraction
+import Dependent.Core.ConSig
 import Dependent.Core.Term
 import Dependent.Core.Program
-
-
-
-
--- Abstraction
-
-abstractClause :: Clause -> Abstracted String Term Clause
-abstractClause (Clause p sc)
-  = Clause p <$> abstractScope sc
-
-abstractSeqClause :: SeqClause -> Abstracted String Term SeqClause
-abstractSeqClause (SeqClause ps sc)
-  = SeqClause ps <$> abstractScope sc
-
-instance Abstract String Term CasesArgType where
-  abstract (CasesArgNil a)
-    = CasesArgNil <$> abstract a
-  abstract (CasesArgCons a sc)
-    = CasesArgCons <$> abstract a <*> abstractScope sc
-
-instance Abstract String Term Term where
-  abstract (Var (Name x))
-    = reader $ \e ->
-        case lookup x e of
-          Nothing -> Var (Name x)
-          Just m  -> m
-  abstract (Var (Generated i))
-    = return $ Var (Generated i)
-  abstract (Ann m ty)
-    = Ann <$> abstract m <*> return ty
-  abstract Type
-    = return Type
-  abstract (Fun a sc)
-    = Fun <$> abstract a <*> abstractScope sc
-  abstract (Lam sc)
-    = Lam <$> abstractScope sc
-  abstract (App f a)
-    = App <$> abstract f <*> abstract a
-  abstract (Con c as)
-    = Con c <$> mapM abstract as
-  abstract (Case a cs)
-    = Case <$> abstract a <*> mapM abstractClause cs
-  abstract (Cases as t cs)
-    = Cases <$> mapM abstract as <*> abstract t <*> mapM abstractSeqClause cs
-
-funHelper :: String -> Term -> Term -> Term
-funHelper x a b = Fun a (Scope $ \[x'] -> runReader (abstract b) [(x,x')])
-
-lamHelper :: String -> Term -> Term
-lamHelper x b = Lam (Scope $ \[a] -> runReader (abstract b) [(x,a)])
-
-clauseHelper :: Pattern -> [String] -> Term -> Clause
-clauseHelper p xs b = Clause p (Scope $ \as -> runReader (abstract b) (zip xs as))
-
-seqClauseHelper :: [Pattern] -> [String] -> Term -> SeqClause
-seqClauseHelper ps xs b = SeqClause ps (Scope $ \as -> runReader (abstract b) (zip xs as))
-
-consCasesArgTypeHelper :: String -> Term -> CasesArgType -> CasesArgType
-consCasesArgTypeHelper x a b = CasesArgCons a (Scope $ \[x'] -> runReader (abstract b) [(x,x')])
 
 
 
@@ -89,8 +32,8 @@ languageDef = Token.LanguageDef
               , Token.identLetter = alphaNum <|> char '_' <|> char '\''
               , Token.opStart = oneOf ""
               , Token.opLetter = oneOf ""
-              , Token.reservedNames = ["data","case","cases","of","end","where","let","Type"]
-              , Token.reservedOpNames = ["|","||","->","\\",":","::","="]
+              , Token.reservedNames = ["data","case","motive","of","end","where","let","Type"]
+              , Token.reservedOpNames = ["|","||","->","\\",":","::","=","."]
               , Token.caseSensitive = True
               }
 
@@ -157,71 +100,72 @@ conData = do c <- decName
              as <- many conArg
              return $ Con c as
 
+assertionPattern = do _ <- reservedOp "."
+                      m <- assertionPatternArg
+                      return $ (AssertionPat m, [])
+
 varPattern = do x <- varName
                 return (VarPat,[x])
 
 noArgConPattern = do c <- decName
-                     return $ (ConPat c [], [])
+                     return $ (ConPat c PatternSeqNil, [])
 
 conPattern = do c <- decName
                 psxs <- many conPatternArg
-                let (ps,xs) = unzip psxs
-                return $ (ConPat c ps, concat xs)
+                let (ps,xs) = foldl' (\(ps,xs) (p,xs') -> (patternSeqHelper p xs' ps, xs' ++ xs))
+                                (PatternSeqNil, [])
+                                psxs
+                return $ (ConPat c ps, xs)
 
 parenPattern = parens pattern
 
-conPatternArg = parenPattern <|> noArgConPattern <|> varPattern
+conPatternArg = assertionPattern <|> parenPattern <|> noArgConPattern <|> varPattern
 
-pattern = parenPattern <|> conPattern <|> varPattern
+assertionPatternArg = parenTerm <|> noArgConData <|> variable <|> typeType
 
-clause = do (p,xs) <- try $ do
-              pxs <- pattern
+pattern = assertionPattern <|> parenPattern <|> conPattern <|> varPattern
+
+patternSeqConsNil = do (p,xs) <- pattern
+                       return (PatternSeqCons p (Scope xs $ \_ -> PatternSeqNil), xs)
+
+patternSeqCons = do (p,xs) <- try $ do
+                      pxs <- pattern
+                      _ <- reservedOp "||"
+                      return pxs
+                    (ps,xs') <- patternSeq
+                    return (patternSeqHelper p xs ps,xs++xs')
+
+patternSeq = patternSeqCons <|> patternSeqConsNil
+
+consMotive = do (x,a) <- try $ parens $ do
+                  x <- varName
+                  _ <- reservedOp ":"
+                  a <- term
+                  return (x,a)
+                _ <- reservedOp "||"
+                b <- caseMotive
+                return $ consMotiveHelper x a b
+
+nilMotive = CaseMotiveNil <$> term
+
+caseMotive = consMotive <|> nilMotive
+
+clause = do (ps,xs) <- try $ do
+              psxs <- patternSeq
               _ <- reservedOp "->"
-              return pxs
+              return psxs
             b <- term
-            return $ clauseHelper p xs b
+            return $ clauseHelper ps xs b
 
 caseExp = do _ <- reserved "case"
-             m <- caseArg
+             ms <- caseArg `sepBy1` reservedOp "||"
+             _ <- reservedOp "motive"
+             mot <- caseMotive
              _ <- reserved "of"
              _ <- optional (reservedOp "|")
              cs <- clause `sepBy` reservedOp "|"
              _ <- reserved "end"
-             return $ Case m cs
-
-consCasesArgType = do (x,a) <- try $ parens $ do
-                        x <- varName
-                        _ <- reservedOp ":"
-                        a <- term
-                        return (x,a)
-                      _ <- reservedOp "||"
-                      b <- casesArgType
-                      return $ consCasesArgTypeHelper x a b
-
-nilCasesArgType = CasesArgNil <$> term
-
-parenCasesArgType = parens casesArgType
-
-casesArgType = parenCasesArgType <|> consCasesArgType <|> nilCasesArgType
-
-seqClause = do psxs <- try $ do
-                 psxs <- pattern `sepBy1` reservedOp "||"
-                 _ <- reservedOp "->"
-                 return psxs
-               let (ps,xss) = unzip psxs
-                   xs = concat xss
-               b <- term
-               return $ seqClauseHelper ps xs b
-
-casesExp = do _ <- reserved "cases"
-              ms <- caseArg `sepBy1` reservedOp "||"
-              _ <- reservedOp "::"
-              t <- casesArgType
-              _ <- reserved "of"
-              _ <- optional (reservedOp "|")
-              cs <- seqClause `sepBy` reservedOp "|"
-              _ <- reserved "end"
-              return $ Cases ms t cs
+             return $ Case ms mot cs
 
 parenTerm = parens term
 
@@ -266,7 +210,7 @@ alternative = do c <- decName
                  as <- many alternativeArg
                  _ <- reservedOp ":"
                  t <- term
-                 return (c,as,t)
+                 return (c,conSigHelper as t)
 
 alternativeArg = parens $ do
                    x <- varName
@@ -274,16 +218,20 @@ alternativeArg = parens $ do
                    t <- term
                    return $ DeclArg x t
 
-emptyTypeDecl = do _ <- reserved "data"
-                   tycon <- decName
-                   tyargs <- many typeArg
-                   _ <- reserved "end"
+emptyTypeDecl = do (tycon,tyargs) <- try $ do
+                     _ <- reserved "data"
+                     tycon <- decName
+                     tyargs <- many typeArg
+                     _ <- reserved "end"
+                     return (tycon,tyargs)
                    return $ TypeDeclaration tycon tyargs []
 
-nonEmptyTypeDecl = do _ <- reserved "data"
-                      tycon <- decName
-                      tyargs <- many typeArg
-                      _ <- reserved "where"
+nonEmptyTypeDecl = do (tycon,tyargs) <- try $ do
+                        _ <- reserved "data"
+                        tycon <- decName
+                        tyargs <- many typeArg
+                        _ <- reserved "where"
+                        return (tycon,tyargs)
                       _ <- optional (reservedOp "|")
                       alts <- alternative `sepBy` reservedOp "|"
                       _ <- reserved "end"
