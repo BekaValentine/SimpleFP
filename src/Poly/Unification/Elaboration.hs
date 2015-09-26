@@ -112,7 +112,7 @@ instance Abstract String Type Type where
     = Forall <$> abstractScope sc
 
 forallHelper :: String -> Type -> Type
-forallHelper x b = Forall (Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
+forallHelper x b = Forall (scope [x] b) --(Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
 
 elabAlt :: String -> [String] -> String -> [Type] -> Elaborator ()
 elabAlt tycon params n args

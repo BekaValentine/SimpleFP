@@ -46,10 +46,10 @@ instance Abstract String Term Term where
     = Case <$> abstract a <*> mapM abstractClause cs
 
 lamHelper :: String -> Term -> Term
-lamHelper x b = Lam (Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
+lamHelper x b = Lam (scope [x] b) --(Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
 
 clauseHelper :: Pattern -> [String] -> Term -> Clause
-clauseHelper p xs b = Clause p (Scope xs $ \as -> runReader (abstract b) (zip xs as))
+clauseHelper p xs b = Clause p (scope xs b) --(Scope xs $ \as -> runReader (abstract b) (zip xs as))
 
 
 
