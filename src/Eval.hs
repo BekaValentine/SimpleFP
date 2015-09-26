@@ -14,6 +14,3 @@ environment = ask
 
 class Eval e a where
   eval :: a -> Evaluator e a
-
-throw :: String -> Evaluator e a
-throw e = lift (Left e)

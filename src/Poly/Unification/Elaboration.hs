@@ -1,3 +1,4 @@
+{-# OPTIONS -Wall #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -5,11 +6,9 @@
 module Poly.Unification.Elaboration where
 
 import Control.Applicative ((<$>),(<*>))
-import Control.Monad (when,unless)
+import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (intercalate)
-import Data.Maybe (isJust)
 
 import Abs
 import Scope
@@ -57,14 +56,14 @@ putContext ctx = do s <- get
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
 when' tc e = do ElabState sig defs ctx <- get
                 case runTypeChecker tc sig defs ctx of
-                  Nothing -> return ()
-                  Just _  -> e
+                  Left _   -> return ()
+                  Right _  -> e
 
-unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
-unless' tc e = do ElabState sig defs ctx <- get
-                  case runTypeChecker tc sig defs ctx of
-                    Nothing -> e
-                    Just _  -> return ()
+liftTC :: TypeChecker a -> Elaborator a
+liftTC tc = do ElabState sig defs ctx <- get
+               case runTypeChecker tc sig defs ctx of
+                 Left e  -> throwError e
+                 Right a -> return a
 
 addDeclaration :: String -> Term -> Type -> Elaborator ()
 addDeclaration n def ty = do defs <- definitions
@@ -86,17 +85,15 @@ elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
   = do when' (typeInDefinitions n)
            $ fail ("Term already defined: " ++ n)
-       unless' (isType ty)
-             $ fail ("Invalid type: " ++ show ty)
-       unless' (extendDefinitions [(n,def,ty)] (check def ty))
-             $ fail ("Definition value does not type check." ++
-                     "\n  Term: " ++ show def ++
-                     "\n  Expected type: " ++ show ty)
+       liftTC (isType ty)
+       liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
 
 
 
 instance Abstract String Type Type where
+  abstract (Meta i)
+    = return $ Meta i
   abstract (TyVar (TyName x))
     = reader $ \e ->
         case lookup x e of
@@ -123,13 +120,11 @@ elabAlt tycon params n args
            consig' = ConSig (length params) (Scope params $ \vs ->
                        let e = zip params vs
                        in (runReader args' e, runReader ret' e))
-       unless' (mapM_ isType args)
-             $ fail ("Invalid constructor signature: " ++
-                     show consig')
+       liftTC (mapM_ isType args)
        addConstructor n consig'
   
 elabAlts :: String -> [String] -> [(String, [Type])] -> Elaborator ()
-elabAlts tycon params [] = return ()
+elabAlts _     _      [] = return ()
 elabAlts tycon params ((n,args):cs) = do elabAlt tycon params n args
                                          elabAlts tycon params cs
 
@@ -141,7 +136,7 @@ elabTypeDecl (TypeDeclaration tycon params alts)
        elabAlts tycon params alts
 
 elabProgram :: Program -> Elaborator ()
-elabProgram (Program stmts) = go stmts
+elabProgram (Program stmts0) = go stmts0
   where
     go :: [Statement] -> Elaborator ()
     go [] = return ()

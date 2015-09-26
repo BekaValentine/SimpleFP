@@ -14,4 +14,9 @@ showConSig f (ConSigCons a (Scope [x] b))
 showConSig _ _
   = error "ConSigs should have exactly one scope argument."
 
+conSigLength :: (String -> a) -> ConSig a -> Int
+conSigLength _ (ConSigNil _) = 0
+conSigLength f (ConSigCons _ (Scope xs b))
+  = 1 + conSigLength f (b (map f xs))
+
 type Signature a = [(String,ConSig a)]

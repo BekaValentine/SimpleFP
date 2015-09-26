@@ -1,10 +1,10 @@
+{-# OPTIONS -Wall #-}
+
 module Simple.Monadic.Elaboration where
 
 import Control.Applicative ((<$>))
-import Control.Monad (when,unless)
+import Control.Monad.Except
 import Control.Monad.State
-import Data.List (intercalate)
-import Data.Maybe (isJust)
 
 import Simple.Core.Term
 import Simple.Core.Type
@@ -50,14 +50,14 @@ putDefinitions defs = do s <- get
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
 when' tc e = do ElabState sig defs ctx <- get
                 case runTypeChecker tc sig defs ctx of
-                  Nothing -> return ()
-                  Just _  -> e
+                  Left _ -> return ()
+                  Right _  -> e
 
-unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
-unless' tc e = do ElabState sig defs ctx <- get
-                  case runTypeChecker tc sig defs ctx of
-                    Nothing -> e
-                    Just _  -> return ()
+liftTC :: TypeChecker a -> Elaborator a
+liftTC tc = do ElabState sig defs ctx <- get
+               case runTypeChecker tc sig defs ctx of
+                 Left e  -> throwError e
+                 Right a -> return a
 
 
 addDeclaration :: String -> Term -> Type -> Elaborator ()
@@ -80,13 +80,9 @@ addConstructor tycon n args
 elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
   = do when' (typeInDefinitions n)
-           $ fail ("Term already defined: " ++ n)
-       unless' (isType ty)
-             $ fail ("Invalid type: " ++ show ty)
-       unless' (extendDefinitions [(n,def,ty)] (check def ty))
-             $ fail ("Definition value does not type check." ++
-                     "\n  Term: " ++ show def ++
-                     "\n  Expected type: " ++ show ty)
+           $ throwError ("Term already defined: " ++ n)
+       liftTC (isType ty)
+       liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
 
 
@@ -94,26 +90,24 @@ elabTermDecl (TermDeclaration n ty def)
 elabAlt :: String -> String -> [Type] -> Elaborator ()
 elabAlt tycon n args
   = do when' (typeInSignature n)
-           $ fail ("Constructor already declared: " ++ n)
-       unless' (mapM_ isType args)
-             $ fail ("Invalid constructor signature: " ++
-                     show (ConSig args (TyCon tycon)))
+           $ throwError ("Constructor already declared: " ++ n)
+       liftTC (mapM_ isType args)
        addConstructor tycon n args
 
 elabAlts :: String -> [(String, [Type])] -> Elaborator ()
-elabAlts tycon [] = return ()
+elabAlts _     [] = return ()
 elabAlts tycon ((n,args):cs) = do elabAlt tycon n args
                                   elabAlts tycon cs
 
 elabTypeDecl :: TypeDeclaration -> Elaborator ()
 elabTypeDecl (TypeDeclaration tycon alts)
   = do when' (isType (TyCon tycon))
-           $ fail ("Type constructor already declared: " ++ tycon)
+           $ throwError ("Type constructor already declared: " ++ tycon)
        addTypeConstructor tycon
        elabAlts tycon alts
 
 elabProgram :: Program -> Elaborator ()
-elabProgram (Program stmts) = go stmts
+elabProgram (Program stmts0) = go stmts0
   where
     go :: [Statement] -> Elaborator ()
     go [] = return ()

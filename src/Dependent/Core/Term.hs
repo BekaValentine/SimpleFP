@@ -59,6 +59,23 @@ data PatternSeq
 
 
 
+
+-- Case Motive Length
+
+caseMotiveLength :: CaseMotive -> Int
+caseMotiveLength (CaseMotiveNil _) = 0
+caseMotiveLength (CaseMotiveCons _ sc)
+  = 1 + caseMotiveLength (instantiate sc [ Var (Name x) | x <- names sc ])
+
+-- Pattern Sequence Length
+patternSeqLength :: PatternSeq -> Int
+patternSeqLength PatternSeqNil = 0
+patternSeqLength (PatternSeqCons _ sc)
+  = 1 + patternSeqLength (instantiate sc [ Var (Name x) | x <- names sc ])
+
+
+
+
 -- Show Instances
 
 instance Show Variable where
@@ -98,6 +115,12 @@ instance ParenBound Pattern where
 instance Show Pattern where
   show p = parenthesizeBoundAtNames Nothing p ["a","b","c","d","e","f","g"]
 
+instance Show PatternSeq where
+  show PatternSeqNil = ""
+  show (PatternSeqCons arg sc)
+    = case instantiate sc [ Var (Name x) | x <- names sc ] of
+        PatternSeqNil -> show arg
+        ret           -> show arg ++ " || " ++ show ret
 
 data TermParenLoc
   = RootTerm
@@ -155,16 +178,9 @@ instance ParenRec Term where
     = c ++ " " ++ intercalate " " (map (parenthesize (Just ConArg)) as)
   parenRec (Case ms mot cs)
     = "cases " ++ intercalate " || " (map (parenthesize Nothing) ms)
-   ++ " motive " ++ auxMotive mot
+   ++ " motive " ++ show mot
    ++ " of " ++ intercalate " | " (map auxClause cs) ++ " end"
     where
-      auxMotive (CaseMotiveNil a)
-        = parenthesize Nothing a
-      auxMotive (CaseMotiveCons a sc)
-        = "(" ++ unwords (names sc) ++ " : "
-       ++ parenthesize Nothing a ++ ") || "
-       ++ auxMotive (instantiate sc [ Var (Name x) | x <- names sc ])
-      
       auxClause (Clause ps sc)
         = let (ps',_) = runState (auxPatternSeq ps) (names sc)
           in intercalate " || " ps'
@@ -183,3 +199,11 @@ instance ParenRec Term where
 
 instance Show Term where
   show t = parenthesize Nothing t
+
+
+
+instance Show CaseMotive where
+  show (CaseMotiveNil ret) = show ret
+  show (CaseMotiveCons arg sc)
+    = "(" ++ unwords (names sc) ++ " : " ++ show arg ++ ") || "
+   ++ show (instantiate sc [ Var (Name x) | x <- names sc ])

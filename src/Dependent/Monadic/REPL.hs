@@ -29,7 +29,7 @@ until_ p prompt action = do
 
 repl :: String -> IO ()
 repl src = case loadProgram src of
-             Left e -> flushStr e
+             Left e -> flushStr ("ERROR: " ++ e ++ "\n")
              Right (sig,defs,ctx,env)
                -> do hSetBuffering stdin LineBuffering
                      until_ (== ":quit")
@@ -40,21 +40,21 @@ repl src = case loadProgram src of
     loadProgram src
       = do prog <- parseProgram src
            ElabState sig defs ctx <- runElaborator (elabProgram prog)
-           let env = definitionsToEnvironment defs
+           let env = [ (x,m) | (x,m,_) <- defs ]
            return (sig,defs,ctx,env)
     
     loadTerm :: Signature Term -> Definitions -> Context -> Environment String Term -> String -> Either String Term
     loadTerm sig defs ctx env src
       = do tm <- parseTerm src
            case runTypeChecker (infer tm) sig defs ctx of
-             Nothing -> Left "Unable to infer type."
-             Just _ -> runReaderT (eval tm) env
+             Left e  -> Left e
+             Right _ -> runReaderT (eval tm) env
     
     evalAndPrint :: Signature Term -> Definitions -> Context -> Environment String Term -> String -> IO ()
     evalAndPrint _ _ _ _ "" = return ()
     evalAndPrint sig defs ctx env src
       = case loadTerm sig defs ctx env src of
-          Left e -> flushStr (e ++ "\n")
+          Left e  -> flushStr ("ERROR: " ++ e ++ "\n")
           Right v -> flushStr (show v ++ "\n")
 
 replFile :: String -> IO ()

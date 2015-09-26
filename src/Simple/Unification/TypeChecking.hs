@@ -1,18 +1,15 @@
+{-# OPTIONS -Wall #-}
+
 module Simple.Unification.TypeChecking where
 
-import System.IO.Unsafe
-
 import Control.Applicative ((<$>))
-import Control.Monad (guard,forM,zipWithM)
+import Control.Monad.Except
 import Control.Monad.State
 import Data.List (intercalate,nubBy,find)
-import Data.Maybe (fromMaybe,fromJust)
 
-import Env
 import Scope
 import Simple.Core.Term
 import Simple.Core.Type
-import Simple.Core.Evaluation
 
 
 
@@ -70,15 +67,12 @@ data TCState
     , tcSubs :: Substitution
     }
 
-type TypeChecker a = StateT TCState Maybe a
+type TypeChecker a = StateT TCState (Either String) a
 
-runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Maybe a
+runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Either String a
 runTypeChecker checker sig defs ctx
   = fmap fst (runStateT checker (TCState sig defs ctx 0 0 []))
       
-
-failure :: TypeChecker a
-failure = StateT (\_ -> Nothing)
 
 signature :: TypeChecker Signature
 signature = tcSig <$> get
@@ -131,32 +125,40 @@ putSubstitution subs = do s <- get
                           put (s { tcSubs = subs })
 
 occurs :: MetaVar -> Type -> Bool
-occurs x (TyCon _) = False
+occurs _ (TyCon _) = False
 occurs x (Fun a b) = occurs x a || occurs x b
 occurs x (Meta y)  = x == y
 
 
-solve :: [Equation] -> Maybe Substitution
-solve eqs = go eqs []
+solve :: [Equation] -> Either String Substitution
+solve eqs0 = go eqs0 []
   where
     go [] subs' = return subs'
+    go (Equation (Meta x) (Meta y) : eqs) subs' | x == y
+      = go eqs subs'
     go (Equation (Meta x) t2 : eqs) subs'
-      = do guard (not (occurs x t2))
+      = do unless (not (occurs x t2))
+             $ throwError $ "Cannot unify because " ++ show (Meta x)
+                         ++ " occurs in " ++ show t2
            go eqs ((x,t2):subs')
     go (Equation t1 (Meta y) : eqs) subs'
-      = do guard (not (occurs y t1))
+      = do unless (not (occurs y t1))
+             $ throwError $ "Cannot unify because " ++ show (Meta y)
+                         ++ " occurs in " ++ show t1
            go eqs ((y,t1):subs')
     go (Equation (TyCon tycon1) (TyCon tycon2) : eqs) subs'
-      = do guard (tycon1 == tycon2)
+      = do unless (tycon1 == tycon2)
+             $ throwError $ "Mismatching type constructors " ++ tycon1 ++ " and " ++ tycon2
            go eqs subs'
     go (Equation (Fun a1 b1) (Fun a2 b2) : eqs) subs'
       = go (Equation a1 a2 : Equation b1 b2 : eqs) subs'
-    go _ _ = Nothing
+    go (Equation l r : _) _
+      = throwError $ "Cannot unify " ++ show l ++ " with " ++ show r
 
 
 addSubstitutions :: Substitution -> TypeChecker ()
-addSubstitutions subs'
-  = do completeSubstitution subs'
+addSubstitutions subs0
+  = do completeSubstitution subs0
        substituteContext
   where
     
@@ -173,9 +175,12 @@ addSubstitutions subs'
 
 
 unify :: Type -> Type -> TypeChecker ()
-unify p q = case solve [Equation p q] of
-              Nothing    -> failure
-              Just subs' -> addSubstitutions subs'
+unify p q
+  = case solve [Equation p q] of
+      Left e -> throwError $ "Cannot unify type: " ++ show p ++ "\n"
+                          ++ "With type: " ++ show q ++ "\n"
+                          ++ "With unification error: " ++ e
+      Right subs' -> addSubstitutions subs'
 
 instantiateMetas :: Substitution -> Type -> Type
 instantiateMetas _ (TyCon tycon)
@@ -190,26 +195,31 @@ instantiateMetas subs (Meta i)
 
 
 typeInDefinitions :: String -> TypeChecker Type
-typeInDefinitions n = do defs <- definitions
-                         case find (\(n',_,_) -> n' == n) defs of
-                           Nothing      -> failure
-                           Just (_,_,t) -> return t
+typeInDefinitions n
+  = do defs <- definitions
+       case find (\(n',_,_) -> n' == n) defs of
+         Nothing      -> throwError $ "Unknown constant/defined term: " ++ n
+         Just (_,_,t) -> return t
 
 typeInContext :: Int -> TypeChecker Type
-typeInContext i = do ctx <- context
-                     case lookup i ctx of
-                       Nothing -> failure
-                       Just t  -> return t
+typeInContext i
+  = do ctx <- context
+       case lookup i ctx of
+         Nothing -> throwError "Unbound automatically generated variable."
+         Just t  -> return t
 
 typeInSignature :: String -> TypeChecker ConSig
-typeInSignature n = do Signature _ consigs <- signature
-                       case lookup n consigs of
-                         Nothing -> failure
-                         Just t  -> return t
+typeInSignature n
+  = do Signature _ consigs <- signature
+       case lookup n consigs of
+         Nothing -> throwError $ "Unknown constructor: " ++ n
+         Just t  -> return t
 
 tyconExists :: String -> TypeChecker ()
-tyconExists n = do Signature tycons _ <- signature
-                   guard $ n `elem` tycons
+tyconExists n
+  = do Signature tycons _ <- signature
+       unless (n `elem` tycons)
+         $ throwError $ "Unknown type constructor: " ++ n
 
 
 
@@ -218,6 +228,7 @@ tyconExists n = do Signature tycons _ <- signature
 isType :: Type -> TypeChecker ()
 isType (TyCon tc) = tyconExists tc
 isType (Fun a b)  = isType a >> isType b
+isType (Meta _)   = return ()
 
 
 
@@ -244,7 +255,12 @@ inferify (App f a)
        return ret
 inferify (Con c as)
   = do ConSig args ret <- typeInSignature c
-       guard $ length as == length args
+       let las = length as
+           largs = length args
+       unless (las == largs)
+         $ throwError $ c ++ " expects " ++ show largs ++ " "
+                   ++ (if largs == 1 then "arg" else "args")
+                   ++ " but was given " ++ show las
        checkifyMulti as args
        return ret
   where
@@ -253,7 +269,7 @@ inferify (Con c as)
     checkifyMulti (m:ms) (t:ts) = do subs <- substitution
                                      checkify m (instantiateMetas subs t)
                                      checkifyMulti ms ts
-    checkifyMulti _      _      = failure
+    checkifyMulti _      _      = throwError "Mismatched constructor signature lengths."
 inferify (Case m cs)
   = do t <- inferify m
        inferifyClauses t cs
@@ -262,7 +278,6 @@ inferifyClause :: Type -> Clause -> TypeChecker Type
 inferifyClause patTy (Clause p sc)
   = do ctx' <- checkifyPattern p patTy
        let xs = [ Var (Generated i) | (i,_) <- ctx' ]
-       ctx <- context
        extendContext ctx'
          $ inferify (instantiate sc xs)
 
@@ -271,39 +286,34 @@ inferifyClauses :: Type -> [Clause] -> TypeChecker Type
 inferifyClauses patTy cs
   = do ts <- mapM (inferifyClause patTy) cs
        case ts of
-         t:ts -> do
-           mapM_ (unify t) ts
+         [] -> throwError "Empty clauses."
+         t:ts' -> do
+           catchError (mapM_ (unify t) ts') $ \e ->
+             throwError $ "Clauses do not all return the same type:\n"
+                       ++ unlines (map show ts) ++ "\n"
+                       ++ "Unification failed with error: " ++ e
            subs <- substitution
            return (instantiateMetas subs t)
-         _ -> failure
 
 
 
 -- Type Checking
 
 checkify :: Term -> Type -> TypeChecker ()
-checkify (Var x) t
-  = do t' <- inferify (Var x)
-       unify t t'
-checkify (Ann m t') t
-  = do unify t t'
-       subs <- substitution
-       checkify m (instantiateMetas subs t')
 checkify (Lam sc) (Fun arg ret)
   = do i <- newName
        extendContext [(i,arg)]
          $ checkify (instantiate sc [Var (Generated i)]) ret
-checkify (App f a) t
-  = do t' <- inferify (App f a)
-       unify t t'
-checkify (Con c as) t
-  = do t' <- inferify (Con c as)
-       unify t t'
-checkify (Case m cs) t
-  = do t' <- inferify (Case m cs)
-       unify t t'
-checkify _ _
-  = failure
+checkify (Lam sc) t
+  = throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
+              ++ "Against non-function type: " ++ show t
+checkify m t
+  = do t' <- infer m
+       catchError (unify t t') $ \e ->
+         throwError $ "Expected term: " ++ show m ++ "\n"
+                   ++ "To have type: " ++ show t ++ "\n"
+                   ++ "Instead found type: " ++ show t' ++ "\n"
+                   ++ "Unification failed with error: " ++ e
 
 checkifyPattern :: Pattern -> Type -> TypeChecker Context
 checkifyPattern VarPat t
@@ -311,7 +321,12 @@ checkifyPattern VarPat t
        return [(i,t)]
 checkifyPattern (ConPat c ps) t
   = do ConSig args ret <- typeInSignature c
-       guard $ length ps == length args
+       let lps = length ps
+           largs = length args
+       unless (lps == largs)
+         $ throwError $ c ++ " expects " ++ show largs ++ " "
+                   ++ (if largs == 1 then "arg" else "args")
+                   ++ " but was given " ++ show lps
        unify t ret
        subs <- substitution
        rss <- zipWithM checkifyPattern ps (map (instantiateMetas subs) args)
@@ -324,7 +339,8 @@ checkifyPattern (ConPat c ps) t
 
 metasSolved :: TypeChecker ()
 metasSolved = do s <- get
-                 guard $ tcNextMeta s == length (tcSubs s)
+                 unless (tcNextMeta s == length (tcSubs s))
+                   $ throwError "Not all metavariables have been solved."
 
 check :: Term -> Type -> TypeChecker ()
 check m t = do checkify m t

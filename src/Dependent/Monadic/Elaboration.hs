@@ -1,7 +1,7 @@
 module Dependent.Monadic.Elaboration where
 
 import Control.Applicative ((<$>))
-import Control.Monad (when,unless)
+import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import Data.List (intercalate)
@@ -55,14 +55,14 @@ putDefinitions defs = do s <- get
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
 when' tc e = do ElabState sig defs ctx <- get
                 case runTypeChecker tc sig defs ctx of
-                  Nothing -> return ()
-                  Just _  -> e
+                  Left _  -> return ()
+                  Right _ -> e
 
-unless' :: TypeChecker a -> Elaborator () -> Elaborator ()
-unless' tc e = do ElabState sig defs ctx <- get
-                  case runTypeChecker tc sig defs ctx of
-                    Nothing -> e
-                    Just _  -> return ()
+liftTC :: TypeChecker a -> Elaborator a
+liftTC tc = do ElabState sig defs ctx <- get
+               case runTypeChecker tc sig defs ctx of
+                 Left e  -> throwError e
+                 Right a -> return a
 
 
 addDeclaration :: String -> Term -> Term -> Elaborator ()
@@ -81,12 +81,8 @@ elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
   = do when' (typeInDefinitions n)
            $ fail ("Term already defined: " ++ n)
-       unless' (check ty Type)
-             $ fail ("Invalid type: " ++ show ty)
-       unless' (extendDefinitions [(n,def,ty)] (check def ty))
-             $ fail ("Definition value does not type check." ++
-                     "\n  Term: " ++ show def ++
-                     "\n  Expected type: " ++ show ty)
+       liftTC (check ty Type)
+       liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
 
 
@@ -95,9 +91,7 @@ elabAlt :: String -> ConSig Term -> Elaborator ()
 elabAlt c consig
   = do when' (typeInSignature c)
            $ fail ("Constructor already declared: " ++ c)
-       unless' (checkConSig consig)
-             $ fail ("Invalid constructor signature: " ++
-                     c ++ " " ++ showConSig (Var . Name) consig)
+       liftTC (checkConSig consig)
        addConstructor c consig
 
 elabTypeDecl :: TypeDeclaration -> Elaborator ()
@@ -105,9 +99,7 @@ elabTypeDecl (TypeDeclaration tycon tyconargs alts)
   = do let tyconSig = conSigHelper tyconargs Type
        when' (typeInSignature tycon)
            $ fail ("Type constructor already declared: " ++ tycon)
-       unless' (checkConSig tyconSig)
-             $ fail ("Type constructor does not type check: " ++
-                     tycon ++ " " ++ showConSig (Var . Name) tyconSig)
+       liftTC (checkConSig tyconSig)
        addConstructor tycon tyconSig
        mapM_ (uncurry elabAlt) alts
 

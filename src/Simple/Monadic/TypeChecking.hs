@@ -3,6 +3,7 @@
 module Simple.Monadic.TypeChecking where
 
 import Control.Applicative ((<$>))
+import Control.Monad.Except
 import Control.Monad.State
 import Data.List (intercalate,find)
 
@@ -63,14 +64,11 @@ data TCState
     , tcNextName :: Int
     }
 
-type TypeChecker a = StateT TCState Maybe a
+type TypeChecker a = StateT TCState (Either String) a
 
-runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Maybe a
+runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Either String a
 runTypeChecker tc sig defs ctx
   = fmap fst (runStateT tc (TCState sig defs ctx 0))
-
-failure :: TypeChecker a
-failure = StateT $ \_ -> Nothing
 
 signature :: TypeChecker Signature
 signature = tcSig <$> get
@@ -103,27 +101,30 @@ newName = do s <- get
              return $ tcNextName s
 
 tyconExists :: String -> TypeChecker ()
-tyconExists n = do Signature tycons _ <- signature
-                   guard $ n `elem` tycons
+tyconExists n
+  = do Signature tycons _ <- signature
+       unless (n `elem` tycons)
+         $ throwError $ "Unknown type constructor: " ++ n
 
 typeInSignature :: String -> TypeChecker ConSig
-typeInSignature n = do Signature _ consigs <- signature
-                       case lookup n consigs of
-                         Nothing -> failure
-                         Just t  -> return t
+typeInSignature n
+  = do Signature _ consigs <- signature
+       case lookup n consigs of
+         Nothing -> throwError $ "Unknown constructor: " ++ n
+         Just t  -> return t
 
 typeInDefinitions :: String -> TypeChecker Type
 typeInDefinitions x
   = do defs <- definitions
        case find (\(y,_,_) -> y == x) defs of
-         Nothing      -> failure
+         Nothing      -> throwError $ "Unknown constant/defined term: " ++ x
          Just (_,_,t) -> return t
 
 typeInContext :: Int -> TypeChecker Type
 typeInContext i
   = do ctx <- context
        case lookup i ctx of
-         Nothing -> failure
+         Nothing -> throwError "Unbound automatically generated variable."
          Just t  -> return t
 
 
@@ -133,7 +134,7 @@ typeInContext i
 isType :: Type -> TypeChecker ()
 isType (TyCon tc) = tyconExists tc
 isType (Fun a b)  = isType a >> isType b
-isType (Meta _)   = error "Meta variables should not be present in the this type checker."
+isType (Meta _)   = throwError "Meta variables should not be present in the this type checker."
 
 
 
@@ -147,14 +148,19 @@ infer (Var (Generated i))
 infer (Ann m t)
   = check m t >> return t
 infer (Lam _)
-  = failure
+  = throwError "Cannot infer the type of a lambda expression."
 infer (App f a)
   = do Fun arg ret <- infer f
        check a arg
        return ret
 infer (Con c as)
   = do ConSig args ret <- typeInSignature c
-       guard $ length as == length args
+       let las = length as
+           largs = length args
+       unless (las == largs)
+         $ throwError $ c ++ " expects " ++ show largs ++ " "
+                   ++ (if largs == 1 then "arg" else "args")
+                   ++ " but was given " ++ show las
        zipWithM_ check as args
        return ret
 infer (Case m cs)
@@ -170,38 +176,41 @@ inferClause patTy (Clause p sc)
          $ infer (instantiate sc xs)
 
 inferClauses :: Type -> [Clause] -> TypeChecker Type
-inferClauses patTy cs = do ts <- mapM (inferClause patTy) cs
-                           case ts of
-                             t:ts' | all (== t) ts'
-                               -> return t
-                             _ -> failure
+inferClauses patTy cs
+  = do ts <- mapM (inferClause patTy) cs
+       case ts of
+         [] -> throwError "Empty clauses."
+         t:ts'
+           | all (== t) ts' -> return t
+           | otherwise ->
+               throwError $ "Clauses do not all return the same type:\n"
+                         ++ unlines (map show ts)
 
 
 
 -- Type Checking
 
+{-
+unless (t == t')
+         $ throwError $ "Expected term: " ++ show (Var x) ++ "\n"
+                     ++ "To have type: " ++ show t ++ "\n"
+                     ++ "Instead found type: " ++ show t'
+-}
+
 check :: Term -> Type -> TypeChecker ()
-check (Var x) t
-  = do t' <- infer (Var x)
-       guard $ t == t'
-check (Ann m t') t
-  = do guard $ t == t'
-       check m t'
 check (Lam sc) (Fun arg ret)
   = do i <- newName
        extendContext [(i,arg)]
          $ check (instantiate sc [Var (Generated i)]) ret
-check (App f a) t
-  = do t' <- infer (App f a)
-       guard $ t == t'
-check (Con c as) t
-  = do t' <- infer (Con c as)
-       guard $ t == t'
-check (Case m cs) t
-  = do t' <- infer (Case m cs)
-       guard $ t == t'
-check _ _
-  = failure
+check (Lam sc) t
+  = throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
+              ++ "Against non-function type: " ++ show t
+check m t
+  = do t' <- infer m
+       unless (t == t')
+         $ throwError $ "Expected term: " ++ show m ++ "\n"
+                     ++ "To have type: " ++ show t ++ "\n"
+                     ++ "Instead found type: " ++ show t'
 
 
 
@@ -211,7 +220,11 @@ checkPattern VarPat t
        return [(i,t)]
 checkPattern (ConPat c ps) t
   = do ConSig args ret <- typeInSignature c
-       guard $ length ps == length args
-            && t == ret
+       let lps = length ps
+           largs = length args
+       unless (lps == largs && t == ret)
+         $ throwError $ c ++ " expects " ++ show largs ++ " "
+                   ++ (if largs == 1 then "arg" else "args")
+                   ++ " but was given " ++ show lps
        rss <- zipWithM checkPattern ps args
        return $ concat rss

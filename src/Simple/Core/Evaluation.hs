@@ -3,7 +3,7 @@
 
 module Simple.Core.Evaluation where
 
-import Control.Monad (zipWithM)
+import Control.Monad.Except
 
 import Eval
 import Scope
@@ -35,7 +35,7 @@ instance Eval Term Term where
   eval (Var (Name x))
     = do env <- environment
          case lookup x env of
-           Nothing -> throw ("Unbound variable: " ++ x ++ "\nEnvironment: " ++ show env)
+           Nothing -> throwError $ "Unknown constant/defined term: " ++ x
            Just m  -> return m
   eval (Var (Generated i))
     = return $ Var (Generated i)
@@ -55,5 +55,5 @@ instance Eval Term Term where
   eval (Case m cs)
     = do em <- eval m
          case matchClauses cs em of
-           Nothing -> throw $ "Incomplete pattern match: " ++ show (Case m cs)
+           Nothing -> throwError $ "Incomplete pattern match: " ++ show (Case m cs)
            Just b  -> eval b

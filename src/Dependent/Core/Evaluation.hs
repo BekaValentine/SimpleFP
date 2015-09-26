@@ -3,6 +3,8 @@
 
 module Dependent.Core.Evaluation where
 
+import Control.Monad.Except
+
 import Eval
 import Scope
 import Dependent.Core.Term
@@ -45,7 +47,7 @@ instance Eval Term Term where
   eval (Var (Name x))
     = do env <- environment
          case lookup x env of
-           Nothing -> throw ("Unbound variable: " ++ x ++ "\nEnvironment: " ++ show env)
+           Nothing -> throwError $ "Unknown constant/defined term: " ++ x
            Just m  -> eval m
   eval (Var (Generated i))
     = return $ Var (Generated i)
@@ -69,5 +71,5 @@ instance Eval Term Term where
   eval (Case ms mot cs)
     = do ems <- mapM eval ms
          case matchClauses cs ems of
-           Nothing -> throw $ "Incomplete pattern match: " ++ show (Case ms mot cs)
+           Nothing -> throwError $ "Incomplete pattern match: " ++ show (Case ms mot cs)
            Just b  -> eval b
