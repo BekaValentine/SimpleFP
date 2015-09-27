@@ -13,7 +13,7 @@ import Poly.Core.Term
 -- Pattern Matching
 
 match :: Pattern -> Term -> Maybe [Term]
-match VarPat v = Just [v]
+match (VarPat _) v = Just [v]
 match (ConPat c ps) (Con c' as)
   | c == c' && length ps == length as
   = fmap concat (zipWithM match ps as)

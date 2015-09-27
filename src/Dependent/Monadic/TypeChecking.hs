@@ -178,7 +178,7 @@ equalTerms (Case as motive cs) (Case as' motive' cs')
            equalTerms (instantiate sc xs) (instantiate sc' xs)
     
     equalPattern :: Pattern -> Pattern -> TypeChecker [Term]
-    equalPattern VarPat VarPat
+    equalPattern (VarPat _) (VarPat _)
       = do i <- newName
            return [Var (Generated i)]
     equalPattern (ConPat c ps) (ConPat c' ps')
@@ -307,7 +307,7 @@ checkCaseMotive (CaseMotiveCons arg sc)
          $ checkCaseMotive (instantiate sc [Var (Generated i)])
 
 checkPattern :: Pattern -> Term -> TypeChecker (Context,Term)
-checkPattern VarPat t
+checkPattern (VarPat _) t
   = do i <- newName
        return ([(i,t)], Var (Generated i))
 checkPattern (ConPat c ps) t

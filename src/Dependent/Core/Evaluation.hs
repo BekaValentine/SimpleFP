@@ -14,7 +14,7 @@ import Dependent.Core.Term
 -- Pattern Matching
 
 matchPattern :: Pattern -> Term -> Maybe [Term]
-matchPattern VarPat v = Just [v]
+matchPattern (VarPat _) v = Just [v]
 matchPattern (ConPat c ps) (Con c' as) | c == c'
   = matchPatternSeq ps as
 matchPattern (AssertionPat _) _ = Just []

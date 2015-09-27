@@ -105,7 +105,7 @@ assertionPattern = do _ <- reservedOp "."
                       return $ (AssertionPat m, [])
 
 varPattern = do x <- varName
-                return (VarPat,[x])
+                return (VarPat x,[x])
 
 noArgConPattern = do c <- decName
                      return $ (ConPat c PatternSeqNil, [])

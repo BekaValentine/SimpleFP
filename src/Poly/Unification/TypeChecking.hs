@@ -419,7 +419,7 @@ equivQuantifiers t t'
   = unify t t'
 
 checkifyPattern :: Pattern -> Type -> TypeChecker Context
-checkifyPattern VarPat t
+checkifyPattern (VarPat _) t
   = do i <- newName
        return [(i,t)]
 checkifyPattern (ConPat c ps) t

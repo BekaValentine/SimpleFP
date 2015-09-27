@@ -316,7 +316,7 @@ checkify m t
                    ++ "Unification failed with error: " ++ e
 
 checkifyPattern :: Pattern -> Type -> TypeChecker Context
-checkifyPattern VarPat t
+checkifyPattern (VarPat _) t
   = do i <- newName
        return [(i,t)]
 checkifyPattern (ConPat c ps) t

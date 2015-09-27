@@ -32,7 +32,7 @@ data Clause
   = Clause Pattern (Scope Term Term)
 
 data Pattern
-  = VarPat
+  = VarPat String
   | ConPat String [Pattern]
 
 
@@ -48,18 +48,17 @@ data PatternParenLoc = ConPatArg
 
 instance ParenLoc Pattern where
   type Loc Pattern = PatternParenLoc
-  parenLoc VarPat        = [ConPatArg]
+  parenLoc (VarPat _)    = [ConPatArg]
   parenLoc (ConPat _ []) = [ConPatArg]
   parenLoc (ConPat _ _)  = []
 
-instance ParenBound Pattern where
-  parenBound VarPat
-    = nextName
-  parenBound (ConPat c [])
-    = return c
-  parenBound (ConPat c ps)
-    = do ps' <- mapM (parenthesizeBound (Just ConPatArg)) ps
-         return $ c ++ " " ++ unwords ps'
+instance ParenRec Pattern where
+  parenRec (VarPat x)
+    = x
+  parenRec (ConPat c [])
+    = c
+  parenRec (ConPat c ps)
+    = c ++ " " ++ unwords (map (parenthesize (Just ConPatArg)) ps)
 
 
 data TermParenLoc = RootTerm | AnnLeft | LamBody | AppLeft | AppRight | ConArg | CaseArg
@@ -104,7 +103,7 @@ instance ParenRec Term where
    ++ intercalate " | " (map auxClause cs) ++ " end"
     where
       auxClause (Clause p sc)
-        = parenthesizeBoundAtNames Nothing p (names sc) ++ " -> "
+        = parenthesize Nothing p ++ " -> "
        ++ parenthesize Nothing (instantiate sc [ Var (Name x) | x <- names sc ])
 
 instance Show Term where

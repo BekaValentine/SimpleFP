@@ -16,7 +16,7 @@ import Dependent.Core.Term
 
 
 instance Abstract String Term Pattern where
-  abstract VarPat = return VarPat
+  abstract (VarPat x) = return $ VarPat x
   abstract (ConPat c ps) = ConPat c <$> abstract ps
   abstract (AssertionPat m) = AssertionPat <$> abstract m
 

@@ -6,7 +6,6 @@
 
 module Dependent.Core.Term where
 
-import Control.Monad.State
 import Data.List (intercalate)
 
 import Parens
@@ -49,7 +48,7 @@ data Clause
   = Clause PatternSeq (Scope Term Term)
 
 data Pattern
-  = VarPat
+  = VarPat String
   | ConPat String PatternSeq
   | AssertionPat Term
 
@@ -87,33 +86,32 @@ data PatternParenLoc = ConPatArg
 
 instance ParenLoc Pattern where
   type Loc Pattern = PatternParenLoc
-  parenLoc VarPat           = [ConPatArg]
+  parenLoc (VarPat _)       = [ConPatArg]
   parenLoc (ConPat _ _)     = []
   parenLoc (AssertionPat _) = [ConPatArg]
 
-instance ParenBound Pattern where
-  parenBound VarPat
-    = nextName
-  parenBound (ConPat c ps)
-    = do mps' <- auxPatternSeq ps
-         case mps' of
-           Nothing  -> return c
-           Just ps' -> return $ c ++ " " ++ unwords ps'
+instance ParenRec Pattern where
+  parenRec (VarPat x)
+    = x
+  parenRec (ConPat c ps)
+    = case auxPatternSeq ps of
+        Nothing  -> c
+        Just ps' -> c ++ " " ++ unwords ps'
     where
-      auxPatternSeq :: PatternSeq -> State [String] (Maybe [String])
+      auxPatternSeq :: PatternSeq -> Maybe [String]
       auxPatternSeq PatternSeqNil
-        = return Nothing
+        = Nothing
       auxPatternSeq (PatternSeqCons p sc)
-        = do p' <- parenBound p
-             mps' <- auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
-             case mps' of
-               Nothing  -> return $ Just [p']
-               Just ps' -> return $ Just (p':ps')
-  parenBound (AssertionPat m)
-    = return $ "." ++ parenthesize (Just AssertionPatArg) m ++ ")"
+        = let p' = parenthesize Nothing p
+              mps' = auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
+          in case mps' of
+               Nothing  -> Just [p']
+               Just ps' -> Just (p':ps')
+  parenRec (AssertionPat m)
+    = "." ++ parenthesize (Just AssertionPatArg) m ++ ")"
 
 instance Show Pattern where
-  show p = parenthesizeBoundAtNames Nothing p ["a","b","c","d","e","f","g"]
+  show p = parenthesize Nothing p
 
 instance Show PatternSeq where
   show PatternSeqNil = ""
@@ -182,18 +180,17 @@ instance ParenRec Term where
    ++ " of " ++ intercalate " | " (map auxClause cs) ++ " end"
     where
       auxClause (Clause ps sc)
-        = let (ps',_) = runState (auxPatternSeq ps) (names sc)
-          in intercalate " || " ps'
+        = intercalate " || " (auxPatternSeq ps)
           ++ " -> " ++ parenthesize Nothing
                          (instantiate sc [ Var (Name x) | x <- names sc ])
       
-      auxPatternSeq :: PatternSeq -> State [String] [String]
+      auxPatternSeq :: PatternSeq -> [String]
       auxPatternSeq PatternSeqNil
-        = return []
+        = []
       auxPatternSeq (PatternSeqCons p sc)
-        = do p' <- parenBound p
-             ps' <- auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
-             return (p':ps')
+        = let p' = parenthesize Nothing p
+              ps' = auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
+          in p':ps'
       
 
 

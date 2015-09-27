@@ -178,7 +178,7 @@ conData = do c <- decName
              return $ Con c as
 
 varPattern = do x <- varName
-                return (VarPat,[x])
+                return (VarPat x,[x])
 
 noArgConPattern = do c <- decName
                      return $ (ConPat c [], [])

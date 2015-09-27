@@ -215,7 +215,7 @@ check m t
 
 
 checkPattern :: Pattern -> Type -> TypeChecker Context
-checkPattern VarPat t
+checkPattern (VarPat _) t
   = do i <- newName
        return [(i,t)]
 checkPattern (ConPat c ps) t
