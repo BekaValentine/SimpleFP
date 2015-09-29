@@ -10,7 +10,7 @@ import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Program
 
-import Simple.Monadic.TypeChecking hiding (signature,definitions,context)
+import Simple.Monadic.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
 
 
 data ElabState

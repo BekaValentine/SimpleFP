@@ -76,23 +76,33 @@ signature = tcSig <$> get
 definitions :: TypeChecker Definitions
 definitions = tcDefs <$> get
 
+putDefinitions :: Definitions -> TypeChecker ()
+putDefinitions defs
+  = do s <- get
+       put (s { tcDefs = defs })
+
 context :: TypeChecker Context
 context = tcCtx <$> get
 
+putContext :: Context -> TypeChecker ()
+putContext ctx
+  = do s <- get
+       put (s { tcCtx = ctx })
+
 extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
 extendDefinitions edefs tc
-  = do s <- get
-       put (s { tcDefs = edefs ++ tcDefs s })
+  = do defs <- definitions
+       putDefinitions (edefs ++ defs)
        x <- tc
-       put s
+       putDefinitions defs
        return x
 
 extendContext :: Context -> TypeChecker a -> TypeChecker a
 extendContext ectx tc
-  = do s <- get
-       put (s { tcCtx = ectx ++ tcCtx s })
+  = do ctx <- context
+       putContext (ectx ++ ctx)
        x <- tc
-       put s
+       putContext ctx
        return x
 
 newName :: TypeChecker Int

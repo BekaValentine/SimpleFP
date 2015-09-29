@@ -14,7 +14,7 @@ import Dependent.Core.ConSig
 import Dependent.Core.Program
 import Dependent.Core.Term
 
-import Dependent.Monadic.TypeChecking hiding (signature,definitions,context)
+import Dependent.Monadic.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
 
 
 

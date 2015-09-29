@@ -61,23 +61,33 @@ signature = tcSig <$> get
 definitions :: TypeChecker Definitions
 definitions = tcDefs <$> get
 
+putDefinitions :: Definitions -> TypeChecker ()
+putDefinitions defs
+  = do s <- get
+       put (s { tcDefs = defs })
+
 context :: TypeChecker Context
 context = tcCtx <$> get
 
+putContext :: Context -> TypeChecker ()
+putContext ctx
+  = do s <- get
+       put (s { tcCtx = ctx })
+
 extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
 extendDefinitions edefs tc
-  = do s <- get
-       put (s { tcDefs = edefs ++ tcDefs s })
+  = do defs <- definitions
+       putDefinitions (edefs ++ defs)
        x <- tc
-       put s
+       putDefinitions defs
        return x
 
 extendContext :: Context -> TypeChecker a -> TypeChecker a
 extendContext ectx tc
-  = do s <- get
-       put (s { tcCtx = ectx ++ tcCtx s })
+  = do ctx <- context
+       putContext (ectx ++ ctx)
        x <- tc
-       put s
+       putContext ctx
        return x
 
 newName :: TypeChecker Int
@@ -337,20 +347,21 @@ checkPattern (AssertionPat m) t
 
 checkClause :: Clause -> CaseMotive -> TypeChecker ()
 checkClause (Clause ps sc0) motive
-  = do (ctx,xs,ret) <- checkPatternSeqMotive ps motive
+  = do (ctx,ret) <- checkPatternSeqMotive ps motive
+       let xs = [ Var (Generated i) | (i,_) <- ctx ]
        extendContext ctx
          $ check (instantiate sc0 xs) ret
   where
-    checkPatternSeqMotive :: PatternSeq -> CaseMotive -> TypeChecker (Context,[Term],Term)
+    checkPatternSeqMotive :: PatternSeq -> CaseMotive -> TypeChecker (Context,Term)
     checkPatternSeqMotive PatternSeqNil (CaseMotiveNil ret)
-      = return ([],[],ret)
+      = return ([],ret)
     checkPatternSeqMotive (PatternSeqCons p sc) (CaseMotiveCons arg sc')
       = do (ctx,x) <- checkPattern p arg
            let is = [ Var (Generated i) | (i,_) <- ctx ]
-           (ctx',xs,ret) <-
+           (ctx',ret) <-
              extendContext ctx
                $ checkPatternSeqMotive (instantiate sc is) (instantiate sc' [x])
-           return (ctx++ctx',x:xs,ret)
+           return (ctx++ctx',ret)
     checkPatternSeqMotive _ _
       = do let lps = patternSeqLength ps
                lmot = caseMotiveLength motive
