@@ -108,7 +108,7 @@ instance ParenRec Pattern where
                Nothing  -> Just [p']
                Just ps' -> Just (p':ps')
   parenRec (AssertionPat m)
-    = "." ++ parenthesize (Just AssertionPatArg) m ++ ")"
+    = "." ++ parenthesize (Just AssertionPatArg) m
 
 instance Show Pattern where
   show p = parenthesize Nothing p
