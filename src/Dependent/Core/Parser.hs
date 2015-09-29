@@ -112,10 +112,15 @@ noArgConPattern = do c <- decName
 
 conPattern = do c <- decName
                 psxs <- many conPatternArg
-                let (ps,xs) = foldl' (\(ps,xs) (p,xs') -> (patternSeqHelper p xs' ps, xs' ++ xs))
-                                (PatternSeqNil, [])
-                                psxs
+                let (ps,xs) = patternSeqAndNames psxs
                 return $ (ConPat c ps, xs)
+  where
+    patternSeqAndNames :: [(Pattern,[String])] -> (PatternSeq,[String])
+    patternSeqAndNames []
+      = (PatternSeqNil, [])
+    patternSeqAndNames ((p,xs):psxs)
+      = let (ps,xs') = patternSeqAndNames psxs
+        in (patternSeqHelper p xs ps, xs++xs')
 
 parenPattern = parens pattern
 
