@@ -48,3 +48,18 @@ end
 let ex2 : Inv Nat Nat (\n -> Suc n) (Suc Zero)
   = InvEl Nat Nat plusOne Zero
 end
+
+data Vec (a : Type) (n : Nat) where
+  | Nil (a : Type) : Vec a Zero
+  | Cons (a : Type) (n : Nat) (x : a) (xs : Vec a n) : Vec a (Suc n)
+end
+
+let vapp : (a : Type) -> (b : Type) -> (n : Nat) -> (fs : Vec ((x : a) -> b) n) -> (xs : Vec a n) -> Vec b n
+  = \a -> \b -> \n -> \fs -> \xs ->
+    case n || fs || xs
+    motive (n' : Nat) || (fs' : Vec ((x : a) -> b) n') || (xs' : Vec a n') || Vec b n'
+    of
+    | Zero   || Nil .((x : a) -> b) || Nil .a -> Nil b
+    | Suc n' || Cons .((x : a) -> b) .n' f fs' || Cons .a .n' x xs' -> Cons b n' (f x) (vapp a b n' fs' xs')
+    end
+end
