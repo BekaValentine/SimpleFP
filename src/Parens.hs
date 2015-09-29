@@ -5,8 +5,6 @@
 
 module Parens where
 
-import Control.Monad.State
-
 class ParenLoc a where
   type Loc a
   parenLoc :: a -> [Loc a]
