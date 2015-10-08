@@ -71,10 +71,12 @@ annotation = do m <- try $ do
 typeType = do _ <- reserved "Type"
               return Type
 
-funType = do (x,arg) <- try $ parens $ do
-                        x <- varName
-                        _ <- reservedOp ":"
-                        arg <- funArg
+funType = do (x,arg) <- try $ do
+                        (x,arg) <- parens $ do
+                          x <- varName
+                          _ <- reservedOp ":"
+                          arg <- funArg
+                          return (x,arg)
                         _ <- reservedOp "->"
                         return (x,arg)
              ret <- funRet
