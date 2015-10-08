@@ -17,14 +17,6 @@ import Dependent.Core.Term
 
 
 
-apM2 :: Monad m => (a -> b -> m c) -> m a -> m b -> m c
-apM2 f ma mb = do a <- ma
-                  b <- mb
-                  f a b
-
-
-
-
 -- Definitions
 
 type Definitions = [(String,Term,Term)]
@@ -225,8 +217,9 @@ infer (Var (Generated i))
   = typeInContext i
 infer (Ann m t)
   = do check t Type
-       check m t
-       return t
+       et <- evaluate t
+       check m et
+       return et
 infer Type
   = return Type
 infer (Fun arg sc)
@@ -239,7 +232,8 @@ infer (Lam _)
   = throwError "Cannot infer the type of a lambda expression."
 infer (App f a)
   = do Fun arg sc <- infer f
-       check a arg
+       earg <- evaluate arg
+       check a earg
        return (instantiate sc [a])
 infer (Con c as)
   = do consig <- typeInSignature c
@@ -248,7 +242,8 @@ infer (Con c as)
     inferConArgs _ [] (ConSigNil ret)
       = return ret
     inferConArgs consig (m:ms) (ConSigCons arg sc)
-      = do check m arg
+      = do earg <- evaluate arg
+           check m earg
            inferConArgs consig ms (instantiate sc [m])
     inferConArgs consig _ _
       = do let las = length as
@@ -265,7 +260,8 @@ infer (Case as0 motive cs)
     checkCaseArgs [] (CaseMotiveNil _)
       = return ()
     checkCaseArgs (a:as) (CaseMotiveCons arg sc)
-      = do check a arg
+      = do earg <- evaluate arg
+           check a earg
            checkCaseArgs as (instantiate sc [a])
     checkCaseArgs _ _
       = do let las = length as0
@@ -298,14 +294,17 @@ check (Lam sc) t
          Fun arg sc' -> do
            check arg Type
            i <- newName
+           eret <- evaluate (instantiate sc' [Var (Generated i)])
            extendContext [(i,arg)]
              $ check (instantiate sc [Var (Generated i)])
-                     (instantiate sc' [Var (Generated i)])
+                     eret
          _ -> throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
               ++ "Against non-function type: " ++ show t
 check m t
   = do t' <- infer m
-       apM2 equalTerms (evaluate t') (evaluate t)
+       et <- evaluate t
+       et' <- evaluate t'
+       equalTerms et et'
 
 checkCaseMotive :: CaseMotive -> TypeChecker ()
 checkCaseMotive (CaseMotiveNil ret)
@@ -323,7 +322,9 @@ checkPattern (VarPat _) t
 checkPattern (ConPat c ps) t
   = do consig <- typeInSignature c
        (ctx,xs,ret) <- checkPatConArgs consig ps consig
-       apM2 equalTerms (evaluate ret) (evaluate t)
+       eret <- evaluate ret
+       et <- evaluate t
+       equalTerms eret et
        return (ctx,Con c xs)
   where
     checkPatConArgs _ PatternSeqNil (ConSigNil ret)
@@ -349,8 +350,9 @@ checkClause :: Clause -> CaseMotive -> TypeChecker ()
 checkClause (Clause ps sc0) motive
   = do (ctx,ret) <- checkPatternSeqMotive ps motive
        let xs = [ Var (Generated i) | (i,_) <- ctx ]
+       eret <- evaluate ret
        extendContext ctx
-         $ check (instantiate sc0 xs) ret
+         $ check (instantiate sc0 xs) eret
   where
     checkPatternSeqMotive :: PatternSeq -> CaseMotive -> TypeChecker (Context,Term)
     checkPatternSeqMotive PatternSeqNil (CaseMotiveNil ret)
