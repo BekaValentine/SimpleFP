@@ -17,6 +17,7 @@ cabal-version:       >=1.10
 
 library
   exposed-modules:     Dependent.Monadic.REPL,
+                       Dependent.Unification.REPL,
                        Simple.Monadic.REPL,
                        Simple.Unification.REPL,
                        Poly.Unification.REPL
