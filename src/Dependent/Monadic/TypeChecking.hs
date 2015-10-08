@@ -231,10 +231,14 @@ infer (Fun arg sc)
 infer (Lam _)
   = throwError "Cannot infer the type of a lambda expression."
 infer (App f a)
-  = do Fun arg sc <- infer f
-       earg <- evaluate arg
-       check a earg
-       return (instantiate sc [a])
+  = do t <- infer f
+       et <- evaluate t
+       case et of
+         Fun arg sc -> do
+           earg <- evaluate arg
+           check a earg
+           return (instantiate sc [a])
+         _ -> throwError $ "Cannot apply a non-function: " ++ show f
 infer (Con c as)
   = do consig <- typeInSignature c
        inferConArgs consig as consig
