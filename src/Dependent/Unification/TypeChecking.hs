@@ -463,17 +463,6 @@ checkifyPattern (AssertionPat m) t
        return ([], m)
 
 
-checkifyPatterns :: [Pattern] -> CaseMotive -> TypeChecker (Context,[Term],Term)
-checkifyPatterns [] (CaseMotiveNil a)
-  = return ([],[],a)
-checkifyPatterns (p:ps) (CaseMotiveCons a sc)
-  = do ea <- evaluate a
-       (ctx,m) <- checkifyPattern p ea
-       (ctx',ms,t) <- checkifyPatterns ps (instantiate sc [m])
-       return (ctx++ctx', m:ms, t)
-checkifyPatterns _ _
-  = throwError "Mismatching length of patterns and case motive args."
-
 
 checkifyClause :: Clause -> CaseMotive -> TypeChecker ()
 checkifyClause (Clause ps sc0) motive
