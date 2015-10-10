@@ -124,17 +124,25 @@ occurs x (Case as mot cs) = any (occurs x) as || occursCaseMotive mot || any occ
 solve :: [Equation] -> TypeChecker Substitution
 solve eqs0 = go eqs0 []
   where
+    evalWithSubs :: Substitution -> Equation -> TypeChecker Equation
+    evalWithSubs subs (Equation l r)
+      = do l' <- evaluate (instantiateMetas subs l)
+           r' <- evaluate (instantiateMetas subs r)
+           return (Equation l' r')
+    
     go [] subs' = return subs'
     go (Equation (Meta x) t2 : eqs) subs'
       = do unless (not (occurs x t2))
              $ throwError $ "Cannot unify because " ++ show (Meta x)
                          ++ " occurs in " ++ show t2
-           go eqs ((x,t2):subs')
+           eqs' <- mapM (evalWithSubs ((x,t2):subs')) eqs
+           go eqs' ((x,t2):subs')
     go (Equation t1 (Meta y) : eqs) subs'
       = do unless (not (occurs y t1))
              $ throwError $ "Cannot unify because " ++ show (Meta y)
                          ++ " occurs in " ++ show t1
-           go eqs ((y,t1):subs')
+           eqs' <- mapM (evalWithSubs ((y,t1):subs')) eqs
+           go eqs' ((y,t1):subs')
     go (Equation (Var x) (Var y) : eqs) subs'
       = do unless (x == y)
              $ throwError $ "Cannot unify variables " ++ show (Var x)
