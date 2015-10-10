@@ -12,7 +12,7 @@ import Eval
 import Scope
 import Dependent.Core.ConSig
 import Dependent.Core.Term
-import Dependent.Core.Evaluation
+import Dependent.Core.Evaluation ()
 
 
 

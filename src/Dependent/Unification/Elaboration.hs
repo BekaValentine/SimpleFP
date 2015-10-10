@@ -1,14 +1,11 @@
+{-# OPTIONS -Wall #-}
+
 module Dependent.Unification.Elaboration where
 
 import Control.Applicative ((<$>))
 import Control.Monad.Except
-import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (intercalate)
-import Data.Maybe (isJust)
 
-import Abs
-import Scope
 import Dependent.Core.Abstraction
 import Dependent.Core.ConSig
 import Dependent.Core.Program
@@ -106,7 +103,7 @@ elabTypeDecl (TypeDeclaration tycon tyconargs alts)
 
 
 elabProgram :: Program -> Elaborator ()
-elabProgram (Program stmts) = go stmts
+elabProgram (Program stmts0) = go stmts0
   where
     go :: [Statement] -> Elaborator ()
     go [] = return ()
