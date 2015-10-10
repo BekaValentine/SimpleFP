@@ -24,12 +24,13 @@ data ElabState
     { elabSig :: Signature
     , elabDefs :: Definitions
     , elabCtx :: Context
+    , elabNextName :: Int
     }
 
 type Elaborator a = StateT ElabState (Either String) a
 
 runElaborator :: Elaborator () -> Either String ElabState
-runElaborator elab = do (_,p) <- runStateT elab (ElabState (Signature [] []) [] [])
+runElaborator elab = do (_,p) <- runStateT elab (ElabState (Signature [] []) [] [] 0)
                         return p
 
 signature :: Elaborator Signature
@@ -54,16 +55,18 @@ putContext ctx = do s <- get
                     put (s { elabCtx = ctx })
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
-when' tc e = do ElabState sig defs ctx <- get
-                case runTypeChecker tc sig defs ctx of
+when' tc e = do ElabState sig defs ctx i <- get
+                case runTypeChecker tc sig defs ctx i of
                   Left _   -> return ()
                   Right _  -> e
 
 liftTC :: TypeChecker a -> Elaborator a
-liftTC tc = do ElabState sig defs ctx <- get
-               case runTypeChecker tc sig defs ctx of
+liftTC tc = do ElabState sig defs ctx i <- get
+               case runTypeChecker tc sig defs ctx i of
                  Left e  -> throwError e
-                 Right a -> return a
+                 Right (a,s) -> do s' <- get
+                                   put s' { elabNextName = tcNextName s }
+                                   return a
 
 addDeclaration :: String -> Term -> Type -> Elaborator ()
 addDeclaration n def ty = do defs <- definitions

@@ -175,7 +175,7 @@ instance ParenRec Term where
   parenRec (Fun plic a sc)
     = let a0' = unwords (names sc) ++ " : " ++ parenthesize (Just FunArg) a
           a' = case plic of
-                 Expl -> a0'
+                 Expl -> "(" ++ a0' ++ ")"
                  Impl -> "{" ++ a0' ++ "}"
       in a' ++ " -> "
       ++ parenthesize (Just FunRet)

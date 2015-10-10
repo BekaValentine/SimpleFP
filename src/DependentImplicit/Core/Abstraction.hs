@@ -16,8 +16,6 @@ import Scope
 import DependentImplicit.Core.ConSig
 import DependentImplicit.Core.Term
 
-
-
 instance Abstract a b Term => Abstract a b Pattern where
   abstract (VarPat x) = return $ VarPat x
   abstract (ConPat c ps) = ConPat c <$> abstract ps

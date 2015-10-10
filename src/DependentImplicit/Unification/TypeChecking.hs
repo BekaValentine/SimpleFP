@@ -1,5 +1,4 @@
 {-# OPTIONS -Wall #-}
-{-# LANGUAGE TupleSections #-}
 
 module DependentImplicit.Unification.TypeChecking where
 
@@ -56,9 +55,9 @@ data TCState
 
 type TypeChecker a = StateT TCState (Either String) a
 
-runTypeChecker :: TypeChecker a -> Signature Term -> Definitions -> Context -> Either String a
-runTypeChecker checker sig defs ctx
-  = fmap fst (runStateT checker (TCState sig defs ctx 0 0 []))
+runTypeChecker :: TypeChecker a -> Signature Term -> Definitions -> Context -> Int -> Either String (a,TCState)
+runTypeChecker checker sig defs ctx i
+  = runStateT checker (TCState sig defs ctx i 0 [])
 
 signature :: TypeChecker (Signature Term)
 signature = tcSig <$> get
@@ -394,7 +393,7 @@ inferify (Fun plic arg sc)
        ret' <- extendContext [(i,arg)]
                  $ checkify (instantiate sc [Var (Generated i)]) Type
        let sc' :: Scope Term Term
-           sc' = Scope (names sc) $ \vs -> runReader (abstract ret') (zip [i] vs)
+           sc' = Scope (names sc) $ \[v] -> runReader (abstract ret') [(i,v)]
        subs <- substitution
        return (instantiateMetas subs (Fun plic arg' sc'), Type)
 inferify (Lam _ _)
@@ -510,7 +509,7 @@ checkify (Lam plic sc) t
                           (instantiate sc [Var (Generated i)])
                           eret
               subs <- substitution
-              return (instantiateMetas subs (Lam Expl (Scope (names sc) $ \vs -> runReader (abstract m') (zip [i] vs))))
+              return (instantiateMetas subs (Lam Expl (Scope (names sc) $ \[v] -> runReader (abstract m') [(i,v)])))
          (Impl, Fun Impl arg sc') -> -- \{y} -> M : {y : A} -> B
            do i <- newName
               eret <- evaluate (instantiate sc' [Var (Generated i)])
@@ -591,7 +590,7 @@ checkifyCaseMotive (CaseMotiveCons a sc)
        b' <- extendContext [(i,a')]
                $ checkifyCaseMotive (instantiate sc [Var (Generated i)])
        subs <- substitution
-       return (instantiateMetasCaseMotive subs (CaseMotiveCons a' (Scope (names sc) $ \vs -> runReader (abstract b') (zip [i] vs))))
+       return (instantiateMetasCaseMotive subs (CaseMotiveCons a' (Scope (names sc) $ \[v] -> runReader (abstract b') [(i,v)])))
 
 checkifyPattern :: Pattern -> Term -> TypeChecker (Pattern,Context,Term)
 checkifyPattern (VarPat x) t

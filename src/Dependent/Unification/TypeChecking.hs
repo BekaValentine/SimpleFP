@@ -52,9 +52,9 @@ data TCState
 
 type TypeChecker a = StateT TCState (Either String) a
 
-runTypeChecker :: TypeChecker a -> Signature Term -> Definitions -> Context -> Either String a
-runTypeChecker checker sig defs ctx
-  = fmap fst (runStateT checker (TCState sig defs ctx 0 0 []))
+runTypeChecker :: TypeChecker a -> Signature Term -> Definitions -> Context -> Int -> Either String (a,TCState)
+runTypeChecker checker sig defs ctx i
+  = runStateT checker (TCState sig defs ctx i 0 [])
 
 signature :: TypeChecker (Signature Term)
 signature = tcSig <$> get
