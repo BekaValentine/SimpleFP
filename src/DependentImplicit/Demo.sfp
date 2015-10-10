@@ -1,7 +1,3 @@
-data Unit where
-  | U : Unit
-end
-
 data Inv {a : Type} {b : Type} (f : (x : a) -> b) (y : b) where
   | InvEl {a : Type} {b : Type} {f : (x : a) -> b} (x : a) : Inv f (f x)
 end
@@ -34,7 +30,7 @@ let plusOne : (n : Nat) -> Nat
   = \n -> Suc n
 end
 
-let ex2 : Inv (\n -> Suc n) (Suc Zero)
+let ex2 : Inv plusOne (Suc Zero)
   = InvEl Zero
 end
 
@@ -62,4 +58,8 @@ let vec : {a : Type} -> {n : Nat} -> (x : a) -> Vec a n
     | Zero   -> Nil
     | Suc n' -> Cons x (vec x)
     end
+end
+
+let ex3 : Vec Bool (Suc (Suc (Suc Zero)))
+  = vec True
 end
