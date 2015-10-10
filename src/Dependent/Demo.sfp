@@ -2,18 +2,6 @@ data Unit where
   | U : Unit
 end
 
-data Foo (u : Unit) where
-  | FooCon (u : Unit) : Foo u
-end
-
-let un : Unit
-  = case U || FooCon U
-    motive (u : Unit) || (f : Foo u) || Unit
-    of
-    | x || FooCon .x -> U
-    end
-end
-
 data Inv (a : Type) (b : Type) (f : (x : a) -> b) (y : b) where
   | InvEl (a : Type) (b : Type) (f : (x : a) -> b) (x : a) : Inv a b f (f x)
 end
