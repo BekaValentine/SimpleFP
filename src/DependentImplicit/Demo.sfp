@@ -34,6 +34,18 @@ let ex2 : Inv plusOne (Suc Zero)
   = InvEl Zero
 end
 
+
+let natInd : (p : (n : Nat) -> Type) -> (z : p Zero) -> (s : (n : Nat) -> (r : p n) -> p (Suc n)) -> (n : Nat) -> p n
+  = \p -> \z -> \s -> \n ->
+    case n
+    motive (n' : Nat) || p n'
+    of
+    | Zero -> z
+    | Suc n' -> s n' (natInd p z s n')
+    end
+end
+
+
 data Vec (a : Type) (n : Nat) where
   | Nil {a : Type} : Vec a Zero
   | Cons {a : Type} {n : Nat} (x : a) (xs : Vec a n) : Vec a (Suc n)
