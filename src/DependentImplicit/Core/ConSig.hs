@@ -10,18 +10,18 @@ data ConSig a = ConSigNil a | ConSigCons Plicity a (Scope a (ConSig a))
 showConSig :: Show a => (String -> a) -> ConSig a -> String
 showConSig _ (ConSigNil a)
   = show a
-showConSig f (ConSigCons plic a (Scope [x] b))
-  = let a0' = x ++ " : " ++ show a
+showConSig f (ConSigCons plic a sc) | length (names sc) == 1
+  = let a0' = unwords (names sc) ++ " : " ++ show a
         a' = case plic of
                Expl -> "(" ++ a0' ++ ") "
                Impl -> "{" ++ a0' ++ "} "
-    in a' ++ showConSig f (b [f x])
+    in a' ++ showConSig f (instantiate sc (map f (names sc)))
 showConSig _ _
   = error "ConSigs should have exactly one scope argument."
 
 conSigLength :: (String -> a) -> ConSig a -> Int
 conSigLength _ (ConSigNil _) = 0
-conSigLength f (ConSigCons _ _ (Scope xs b))
-  = 1 + conSigLength f (b (map f xs))
+conSigLength f (ConSigCons _ _ sc)
+  = 1 + conSigLength f (instantiate sc (map f (names sc)))
 
 type Signature a = [(String,ConSig a)]

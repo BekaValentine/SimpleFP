@@ -168,7 +168,7 @@ assertionPatternArg = parenTerm <|> noArgConData <|> variable <|> typeType
 pattern = assertionPattern <|> parenPattern <|> conPattern <|> varPattern
 
 patternSeqConsNil = do (p,xs) <- pattern
-                       return (PatternSeqCons Expl p (Scope xs $ \_ -> PatternSeqNil), xs)
+                       return (PatternSeqCons Expl p (scope xs PatternSeqNil), xs)
 
 patternSeqCons = do (p,xs) <- try $ do
                       pxs <- pattern

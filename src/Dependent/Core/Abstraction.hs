@@ -62,19 +62,19 @@ instance Abstract String Term Term where
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
 
 funHelper :: String -> Term -> Term -> Term
-funHelper x a b = Fun a (scope [x] b)--(Scope [x] $ \[x'] -> runReader (abstract b) [(x,x')])
+funHelper x a b = Fun a (scope [x] b)
 
 lamHelper :: String -> Term -> Term
-lamHelper x b = Lam (scope [x] b) --(Scope [x] $ \[a] -> runReader (abstract b) [(x,a)])
+lamHelper x b = Lam (scope [x] b)
 
 patternSeqHelper :: Pattern -> [String] -> PatternSeq -> PatternSeq
-patternSeqHelper p xs ps = PatternSeqCons p (scope xs ps)--(Scope xs $ \as -> runReader (abstract ps) (zip xs as))
+patternSeqHelper p xs ps = PatternSeqCons p (scope xs ps)
 
 clauseHelper :: PatternSeq -> [String] -> Term -> Clause
-clauseHelper ps xs b = Clause ps (scope xs b) --(Scope xs $ \as -> runReader (abstract b) (zip xs as))
+clauseHelper ps xs b = Clause ps (scope xs b)
 
 consMotiveHelper :: String -> Term -> CaseMotive -> CaseMotive
-consMotiveHelper x a b = CaseMotiveCons a (scope [x] b) --(Scope [x] $ \[x'] -> runReader (abstract b) [(x,x')])
+consMotiveHelper x a b = CaseMotiveCons a (scope [x] b)
 
 instance Abstract String Term (ConSig Term) where
   abstract (ConSigNil a)
@@ -85,4 +85,4 @@ instance Abstract String Term (ConSig Term) where
 conSigHelper :: [DeclArg] -> Term -> ConSig Term
 conSigHelper [] b = ConSigNil b
 conSigHelper (DeclArg x a:as) b
-  = ConSigCons a (scope [x] (conSigHelper as b)) --(Scope [x] $ \[v] -> runReader (abstract (conSigHelper as b)) [(x,v)])
+  = ConSigCons a (scope [x] (conSigHelper as b))
