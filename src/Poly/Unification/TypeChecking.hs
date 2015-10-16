@@ -1,4 +1,5 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Poly.Unification.TypeChecking where
 
@@ -8,6 +9,7 @@ import Control.Monad.State
 import Data.List (intercalate,nubBy,find)
 
 import Scope
+import TypeChecker
 import Poly.Core.Term
 import Poly.Core.Type
 
@@ -84,6 +86,28 @@ data TCState
     , tcSubs :: Substitution
     }
 
+instance TypeCheckerState TCState where
+  type Sig TCState = Signature
+  type Defs TCState = Definitions
+  type Ctx TCState = Context
+  typeCheckerSig = tcSig
+  putTypeCheckerSig s sig = s { tcSig = sig }
+  typeCheckerDefs = tcDefs
+  putTypeCheckerDefs s defs = s { tcDefs = defs }
+  addTypeCheckerDefs s edefs = s { tcDefs = edefs ++ tcDefs s }
+  typeCheckerCtx = tcCtx
+  putTypeCheckerCtx s ctx = s { tcCtx = ctx }
+  addTypeCheckerCtx s ectx = s { tcCtx = ectx ++ tcCtx s }
+  typeCheckerNextName = tcNextName
+  putTypeCheckerNextName s n = s { tcNextName = n }
+
+instance TypeCheckerMetas TCState where
+  type Subs TCState = Substitution
+  typeCheckerNextMeta = tcNextMeta
+  putTypeCheckerNextMeta s n = s { tcNextMeta = n }
+  typeCheckerSubs = tcSubs
+  putTypeCheckerSubs s subs = s { tcSubs = subs }
+
 type TypeChecker a = StateT TCState (Either String) a
 
 runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Int -> Either String (a,TCState)
@@ -91,44 +115,12 @@ runTypeChecker checker sig defs ctx i
   = runStateT checker (TCState sig defs ctx [] i 0 [])
       
 
-signature :: TypeChecker Signature
-signature = tcSig <$> get
-
-definitions :: TypeChecker Definitions
-definitions = tcDefs <$> get
-
-context :: TypeChecker Context
-context = tcCtx <$> get
-
 tyVarContext :: TypeChecker TyVarContext
 tyVarContext = tcTyVarCtx <$> get
-
-putDefinitions :: Definitions -> TypeChecker ()
-putDefinitions defs = do s <- get
-                         put (s { tcDefs = defs })
-
-putContext :: Context -> TypeChecker ()
-putContext ctx = do s <- get
-                    put (s { tcCtx = ctx })
 
 putTyVarContext :: TyVarContext -> TypeChecker ()
 putTyVarContext tyVarCtx = do s <- get
                               put (s { tcTyVarCtx = tyVarCtx })
-
-extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
-extendDefinitions edefs tc
-  = do defs <- definitions
-       putDefinitions (edefs ++ defs)
-       x <- tc
-       putDefinitions defs
-       return x
-
-extendContext :: Context -> TypeChecker a -> TypeChecker a
-extendContext ectx tc = do ctx <- context
-                           putContext (ectx++ctx)
-                           x <- tc
-                           putContext ctx
-                           return x
 
 extendTyVarContext :: TyVarContext -> TypeChecker a -> TypeChecker a
 extendTyVarContext etyVarCtx tc = do tyVarCtx <- tyVarContext
@@ -136,23 +128,6 @@ extendTyVarContext etyVarCtx tc = do tyVarCtx <- tyVarContext
                                      x <- tc
                                      putTyVarContext tyVarCtx
                                      return x
-
-newName :: TypeChecker Int
-newName = do s <- get
-             put (s { tcNextName = 1 + tcNextName s })
-             return $ tcNextName s
-
-newMetaVar :: TypeChecker Type
-newMetaVar = do s <- get
-                put (s { tcNextMeta = 1 + tcNextMeta s })
-                return $ Meta (tcNextMeta s)
-
-substitution :: TypeChecker Substitution
-substitution = tcSubs <$> get
-
-putSubstitution :: Substitution -> TypeChecker ()
-putSubstitution subs = do s <- get
-                          put (s { tcSubs = subs })
 
 occurs :: MetaVar -> Type -> Bool
 occurs x (TyCon _ args) = any (occurs x) args
@@ -294,7 +269,7 @@ isType (Forall sc)  = do i <- newName
 
 instantiateParams :: Int -> Scope Type ([Type],Type) -> TypeChecker ([Type],Type)
 instantiateParams n sc
-  = do ms <- replicateM n newMetaVar
+  = do ms <- replicateM n (fmap Meta newMetaVar)
        return $ instantiate sc ms
 
 
@@ -302,7 +277,8 @@ instantiateParams n sc
 -- Instantiating quantified values until there are no more initial quantifiers
 instantiateQuantifiers :: Type -> TypeChecker Type
 instantiateQuantifiers (Forall sc)
-  = do m <- newMetaVar
+  = do meta <- newMetaVar
+       let m = Meta meta
        instantiateQuantifiers (instantiate sc [m])
 instantiateQuantifiers t = return t
 
@@ -322,7 +298,8 @@ inferify (Ann m t)
        return $ instantiateMetas subs t
 inferify (Lam sc)
   = do i <- newName
-       arg <- newMetaVar
+       meta <- newMetaVar
+       let arg = Meta meta
        ret <- extendContext [(i,arg)]
                 $ inferify (instantiate sc [Var (Generated i)])
        subs <- substitution
@@ -409,7 +386,8 @@ equivQuantifiers t (Forall sc')
   = do i <- newName
        equivQuantifiers t (instantiate sc' [TyVar (TyGenerated i)])
 equivQuantifiers (Forall sc) t'
-  = do x2 <- newMetaVar
+  = do meta <- newMetaVar
+       let x2 = Meta meta
        equivQuantifiers (instantiate sc [x2]) t'
 equivQuantifiers (Fun arg ret) (Fun arg' ret')
   = do --unify arg arg'

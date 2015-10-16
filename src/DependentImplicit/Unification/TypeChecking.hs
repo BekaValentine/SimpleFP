@@ -1,4 +1,5 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module DependentImplicit.Unification.TypeChecking where
 
@@ -12,6 +13,7 @@ import Abs
 import Eval
 import Plicity
 import Scope
+import TypeChecker
 import DependentImplicit.Core.Abstraction ()
 import DependentImplicit.Core.ConSig
 import DependentImplicit.Core.Evaluation ()
@@ -53,59 +55,34 @@ data TCState
     , tcSubs :: Substitution
     }
 
+instance TypeCheckerState TCState where
+  type Sig TCState = Signature Term
+  type Defs TCState = Definitions
+  type Ctx TCState = Context
+  typeCheckerSig = tcSig
+  putTypeCheckerSig s sig = s { tcSig = sig }
+  typeCheckerDefs = tcDefs
+  putTypeCheckerDefs s defs = s { tcDefs = defs }
+  addTypeCheckerDefs s edefs = s { tcDefs = edefs ++ tcDefs s }
+  typeCheckerCtx = tcCtx
+  putTypeCheckerCtx s ctx = s { tcCtx = ctx }
+  addTypeCheckerCtx s ectx = s { tcCtx = ectx ++ tcCtx s }
+  typeCheckerNextName = tcNextName
+  putTypeCheckerNextName s n = s { tcNextName = n }
+
+instance TypeCheckerMetas TCState where
+  type Subs TCState = Substitution
+  typeCheckerNextMeta = tcNextMeta
+  putTypeCheckerNextMeta s n = s { tcNextMeta = n }
+  typeCheckerSubs = tcSubs
+  putTypeCheckerSubs s subs = s { tcSubs = subs }
+
 type TypeChecker a = StateT TCState (Either String) a
 
 runTypeChecker :: TypeChecker a -> Signature Term -> Definitions -> Context -> Int -> Either String (a,TCState)
 runTypeChecker checker sig defs ctx i
   = runStateT checker (TCState sig defs ctx i 0 [])
 
-signature :: TypeChecker (Signature Term)
-signature = tcSig <$> get
-
-definitions :: TypeChecker Definitions
-definitions = tcDefs <$> get
-
-putDefinitions :: Definitions -> TypeChecker ()
-putDefinitions defs = do s <- get
-                         put (s { tcDefs = defs })
-
-context :: TypeChecker Context
-context = tcCtx <$> get
-
-putContext :: Context -> TypeChecker ()
-putContext ctx = do s <- get
-                    put (s { tcCtx = ctx })
-
-extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
-extendDefinitions edefs tc = do defs <- definitions
-                                putDefinitions (edefs ++ defs)
-                                x <- tc
-                                putDefinitions defs
-                                return x
-
-extendContext :: Context -> TypeChecker a -> TypeChecker a
-extendContext ectx tc = do ctx <- context
-                           putContext (ectx++ctx)
-                           x <- tc
-                           putContext ctx
-                           return x
-
-newName :: TypeChecker Int
-newName = do s <- get
-             put (s { tcNextName = 1 + tcNextName s })
-             return $ tcNextName s
-
-newMetaVar :: TypeChecker Term
-newMetaVar = do s <- get
-                put (s { tcNextMeta = 1 + tcNextMeta s })
-                return $ Meta (tcNextMeta s)
-
-substitution :: TypeChecker Substitution
-substitution = tcSubs <$> get
-
-putSubstitution :: Substitution -> TypeChecker ()
-putSubstitution subs = do s <- get
-                          put (s { tcSubs = subs })
 
 occurs :: MetaVar -> Term -> Bool
 occurs x (Meta y)         = x == y
@@ -415,8 +392,9 @@ inferify (App plic f a)
            a' <- checkify a earg
            return (App Impl f' a', instantiate sc [a'])
     insertImplicits f' Expl (Fun Impl _ sc)
-      = do impla <- newMetaVar
-           let newF' = App Impl f' impla
+      = do meta <- newMetaVar
+           let impla = Meta meta
+               newF' = App Impl f' impla
            newT' <- evaluate (instantiate sc [impla])
            insertImplicits newF' Expl newT'
     insertImplicits _ Impl (Fun Expl _ _)
@@ -446,7 +424,8 @@ inferify (Con c as)
            (ms',ret) <- inferifyConArgs consig ms (instantiate sc [m])
            return ((Impl,m'):ms', ret)
     inferifyConArgs consig ms (ConSigCons Impl _ sc)
-      = do implm <- newMetaVar
+      = do meta <- newMetaVar
+           let implm = Meta meta
            (ms',ret) <- inferifyConArgs consig ms (instantiate sc [implm])
            return ((Impl,implm):ms', ret)
     inferifyConArgs consig ((Impl,_):_) (ConSigCons Expl _ _)
@@ -552,9 +531,10 @@ checkify (Con c as) t
       = do (ats,ret) <- dropConArgs ms (instantiate sc [m])
            return (Right (Impl,m,arg):ats, ret)
     dropConArgs ms (ConSigCons Impl _ sc)
-      = do i <- newMetaVar
-           (ats,ret) <- dropConArgs ms (instantiate sc [i])
-           return (Left (Impl,i):ats,ret)
+      = do meta <- newMetaVar
+           let x = Meta meta
+           (ats,ret) <- dropConArgs ms (instantiate sc [x])
+           return (Left (Impl,x):ats,ret)
     dropConArgs ((Impl,_):_) (ConSigCons Expl _ _)
       = throwError $ "Mismatching plicits when checking " ++ show (Con c as)
                   ++ " has type " ++ show t
@@ -596,9 +576,9 @@ checkifyPattern :: Pattern -> Term -> TypeChecker (Pattern,Context,Term)
 checkifyPattern (VarPat x) t
   = do i <- newName
        return (VarPat x, [(i,t)], Var (Generated i))
-checkifyPattern (ConPat c ps) t
+checkifyPattern (ConPat c ps0) t
   = do sig <- typeInSignature c
-       (ps',ctx,xs,ret) <- checkifyPatConArgs sig ps sig
+       (ps',ctx,xs,ret) <- checkifyPatConArgs sig ps0 sig
        et <- evaluate t
        eret <- evaluate ret
        unify et eret
@@ -635,22 +615,23 @@ checkifyPattern (ConPat c ps) t
                   , ret
                   )
     checkifyPatConArgs consig ps (ConSigCons Impl _ sc')
-      = do i <- newMetaVar
+      = do meta <- newMetaVar
+           let x = Meta meta
            (ps',ctx',xs,ret) <- checkifyPatConArgs
                                   consig
                                   ps
-                                  (instantiate sc' [i])
-           return ( PatternSeqCons Impl (AssertionPat i) (Scope (names sc') $ \_ -> ps')
+                                  (instantiate sc' [x])
+           return ( PatternSeqCons Impl (AssertionPat x) (Scope (names sc') $ \_ -> ps')
                   , ctx'
-                  , (Impl,i):xs
+                  , (Impl,x):xs
                   , ret
                   )
     checkifyPatConArgs consig (PatternSeqCons Impl _ _) (ConSigCons Expl _ _)
       = throwError $ "Expected an explicit argument but found an implicit argument "
-                  ++ "when checking " ++ show (ConPat c ps)
+                  ++ "when checking " ++ show (ConPat c ps0)
                   ++ " matches the signature " ++ showConSig (Var . Name) consig
     checkifyPatConArgs consig _ _
-      = do let lps = patternSeqLength ps
+      = do let lps = patternSeqLength ps0
                lsig = conSigLength (Var . Name) consig
            throwError $ c ++ " expects " ++ show lsig ++ " case "
                    ++ (if lsig == 1 then "arg" else "args")

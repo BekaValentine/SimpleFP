@@ -1,8 +1,8 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Dependent.Monadic.TypeChecking where
 
-import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
@@ -10,6 +10,7 @@ import Data.List (find)
 
 import Eval
 import Scope
+import TypeChecker
 import Dependent.Core.ConSig
 import Dependent.Core.Evaluation ()
 import Dependent.Core.Term
@@ -41,51 +42,26 @@ data TCState
     , tcNextName :: Int
     }
 
+instance TypeCheckerState TCState where
+  type Sig TCState = Signature Term
+  type Defs TCState = Definitions
+  type Ctx TCState = Context
+  typeCheckerSig = tcSig
+  putTypeCheckerSig s sig = s { tcSig = sig }
+  typeCheckerDefs = tcDefs
+  putTypeCheckerDefs s defs = s { tcDefs = defs }
+  addTypeCheckerDefs s edefs = s { tcDefs = edefs ++ tcDefs s }
+  typeCheckerCtx = tcCtx
+  putTypeCheckerCtx s ctx = s { tcCtx = ctx }
+  addTypeCheckerCtx s ectx = s { tcCtx = ectx ++ tcCtx s }
+  typeCheckerNextName = tcNextName
+  putTypeCheckerNextName s n = s { tcNextName = n }
+
 type TypeChecker a = StateT TCState (Either String) a
 
 runTypeChecker :: TypeChecker a -> Signature Term -> Definitions -> Context -> Int -> Either String (a,TCState)
 runTypeChecker tc sig defs ctx i
   = runStateT tc (TCState sig defs ctx i)
-
-signature :: TypeChecker (Signature Term)
-signature = tcSig <$> get
-
-definitions :: TypeChecker Definitions
-definitions = tcDefs <$> get
-
-putDefinitions :: Definitions -> TypeChecker ()
-putDefinitions defs
-  = do s <- get
-       put (s { tcDefs = defs })
-
-context :: TypeChecker Context
-context = tcCtx <$> get
-
-putContext :: Context -> TypeChecker ()
-putContext ctx
-  = do s <- get
-       put (s { tcCtx = ctx })
-
-extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
-extendDefinitions edefs tc
-  = do defs <- definitions
-       putDefinitions (edefs ++ defs)
-       x <- tc
-       putDefinitions defs
-       return x
-
-extendContext :: Context -> TypeChecker a -> TypeChecker a
-extendContext ectx tc
-  = do ctx <- context
-       putContext (ectx ++ ctx)
-       x <- tc
-       putContext ctx
-       return x
-
-newName :: TypeChecker Int
-newName = do s <- get
-             put (s { tcNextName = 1 + tcNextName s })
-             return $ tcNextName s
 
 typeInSignature :: String -> TypeChecker (ConSig Term)
 typeInSignature n = do consigs <- signature

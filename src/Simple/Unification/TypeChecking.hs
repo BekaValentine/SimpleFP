@@ -1,13 +1,14 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Simple.Unification.TypeChecking where
 
-import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
 import Data.List (intercalate,nubBy,find)
 
 import Scope
+import TypeChecker
 import Simple.Core.Term
 import Simple.Core.Type
 
@@ -67,62 +68,33 @@ data TCState
     , tcSubs :: Substitution
     }
 
+instance TypeCheckerState TCState where
+  type Sig TCState = Signature
+  type Defs TCState = Definitions
+  type Ctx TCState = Context
+  typeCheckerSig = tcSig
+  putTypeCheckerSig s sig = s { tcSig = sig }
+  typeCheckerDefs = tcDefs
+  putTypeCheckerDefs s defs = s { tcDefs = defs }
+  addTypeCheckerDefs s edefs = s { tcDefs = edefs ++ tcDefs s }
+  typeCheckerCtx = tcCtx
+  putTypeCheckerCtx s ctx = s { tcCtx = ctx }
+  addTypeCheckerCtx s ectx = s { tcCtx = ectx ++ tcCtx s }
+  typeCheckerNextName = tcNextName
+  putTypeCheckerNextName s n = s { tcNextName = n }
+
+instance TypeCheckerMetas TCState where
+  type Subs TCState = Substitution
+  typeCheckerNextMeta = tcNextMeta
+  putTypeCheckerNextMeta s n = s { tcNextMeta = n }
+  typeCheckerSubs = tcSubs
+  putTypeCheckerSubs s subs = s { tcSubs = subs }
+
 type TypeChecker a = StateT TCState (Either String) a
 
 runTypeChecker :: TypeChecker a -> Signature -> Definitions -> Context -> Int -> Either String (a,TCState)
 runTypeChecker checker sig defs ctx i
   = runStateT checker (TCState sig defs ctx i 0 [])
-      
-
-signature :: TypeChecker Signature
-signature = tcSig <$> get
-
-definitions :: TypeChecker Definitions
-definitions = tcDefs <$> get
-
-putDefinitions :: Definitions -> TypeChecker ()
-putDefinitions defs = do s <- get
-                         put (s { tcDefs = defs })
-
-context :: TypeChecker Context
-context = tcCtx <$> get
-
-putContext :: Context -> TypeChecker ()
-putContext ctx = do s <- get
-                    put (s { tcCtx = ctx })
-
-extendDefinitions :: Definitions -> TypeChecker a -> TypeChecker a
-extendDefinitions edefs tc
-  = do defs <- definitions
-       putDefinitions (edefs++defs)
-       x <- tc
-       putDefinitions defs
-       return x
-
-extendContext :: Context -> TypeChecker a -> TypeChecker a
-extendContext ectx tc
-  = do ctx <- context
-       putContext (ectx++ctx)
-       x <- tc
-       putContext ctx
-       return x
-
-newName :: TypeChecker Int
-newName = do s <- get
-             put (s { tcNextName = 1 + tcNextName s })
-             return $ tcNextName s
-
-newMetaVar :: TypeChecker Type
-newMetaVar = do s <- get
-                put (s { tcNextMeta = 1 + tcNextMeta s })
-                return $ Meta (tcNextMeta s)
-
-substitution :: TypeChecker Substitution
-substitution = tcSubs <$> get
-
-putSubstitution :: Substitution -> TypeChecker ()
-putSubstitution subs = do s <- get
-                          put (s { tcSubs = subs })
 
 occurs :: MetaVar -> Type -> Bool
 occurs _ (TyCon _) = False
@@ -244,7 +216,8 @@ inferify (Ann m t)
        return t
 inferify (Lam sc)
   = do i <- newName
-       arg <- newMetaVar
+       meta <- newMetaVar
+       let arg = Meta meta
        ret <- extendContext [(i,arg)]
                 $ inferify (instantiate sc [Var (Generated i)])
        subs <- substitution

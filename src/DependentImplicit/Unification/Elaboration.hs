@@ -6,12 +6,13 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
 
+import TypeChecker (extendDefinitions)
 import DependentImplicit.Core.Abstraction
 import DependentImplicit.Core.ConSig
 import DependentImplicit.Core.Program
 import DependentImplicit.Core.Term
 
-import DependentImplicit.Unification.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
+import DependentImplicit.Unification.TypeChecking
 
 
 

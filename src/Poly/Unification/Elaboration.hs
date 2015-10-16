@@ -12,11 +12,12 @@ import Control.Monad.State
 
 import Abs
 import Scope
+import TypeChecker (extendDefinitions)
 import Poly.Core.Term
 import Poly.Core.Type
 import Poly.Core.Program
 
-import Poly.Unification.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
+import Poly.Unification.TypeChecking
 
 
 data ElabState

@@ -6,11 +6,12 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
 
+import TypeChecker (extendDefinitions)
 import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Program
 
-import Simple.Unification.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
+import Simple.Unification.TypeChecking
 
 
 data ElabState

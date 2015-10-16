@@ -9,12 +9,13 @@ import Data.Maybe (isJust)
 
 import Abs
 import Scope
+import TypeChecker (extendDefinitions)
 import Dependent.Core.Abstraction
 import Dependent.Core.ConSig
 import Dependent.Core.Program
 import Dependent.Core.Term
 
-import Dependent.Monadic.TypeChecking hiding (signature,definitions,putDefinitions,context,putContext)
+import Dependent.Monadic.TypeChecking
 
 
 
