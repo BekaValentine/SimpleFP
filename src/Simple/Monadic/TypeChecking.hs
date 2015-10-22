@@ -176,13 +176,6 @@ inferClauses patTy cs
 
 -- Type Checking
 
-{-
-unless (t == t')
-         $ throwError $ "Expected term: " ++ show (Var x) ++ "\n"
-                     ++ "To have type: " ++ show t ++ "\n"
-                     ++ "Instead found type: " ++ show t'
--}
-
 check :: Term -> Type -> TypeChecker ()
 check (Lam sc) (Fun arg ret)
   = do i <- newName
