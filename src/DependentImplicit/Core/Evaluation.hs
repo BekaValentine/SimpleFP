@@ -1,10 +1,13 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module DependentImplicit.Core.Evaluation where
 
 import Control.Monad.Except
 
+import Env
 import Eval
 import Plicity
 import Scope
@@ -54,7 +57,7 @@ matchClauses (Clause ps sc:cs) ms
 
 -- Standard Eager Evaluation
 
-instance Eval Term Term where
+instance Eval (Environment String Term) Term where
   eval (Meta i)
     = return $ Meta i
   eval (Var (Name x))

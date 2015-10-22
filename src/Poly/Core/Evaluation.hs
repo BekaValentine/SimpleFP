@@ -1,10 +1,13 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Poly.Core.Evaluation where
 
 import Control.Monad.Except
 
+import Env
 import Eval
 import Scope
 import Poly.Core.Term
@@ -31,7 +34,7 @@ matchClauses (Clause p sc:cs) v
 
 -- Standard Eager Evaluation
 
-instance Eval Term Term where
+instance Eval (Environment String Term) Term where
   eval (Var (Name x))
     = do env <- environment
          case lookup x env of
