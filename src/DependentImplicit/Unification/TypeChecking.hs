@@ -166,6 +166,7 @@ solve eqs0 = go eqs0 []
            eqs' <- zipConArgs as1 as2
            go (eqs' ++ eqs) subs'
       where
+        zipConArgs :: [(Plicity,Term)] -> [(Plicity,Term)] -> TypeChecker [Equation]
         zipConArgs [] [] = return []
         zipConArgs ((plic1',a1'):as1') ((plic2',a2'):as2')
           = if plic1' == plic2'
@@ -191,6 +192,7 @@ solve eqs0 = go eqs0 []
            go (argEqs ++ motEqs ++ clauseEqs ++ eqs) subs'
     go (Equation m m':_) _ = throwError $ "Terms not equal: " ++ show m ++ " and " ++ show m'
     
+    goCaseMotive :: CaseMotive -> CaseMotive -> TypeChecker [Equation]
     goCaseMotive (CaseMotiveNil a1) (CaseMotiveNil a2)
       = return [Equation a1 a2]
     goCaseMotive (CaseMotiveCons a1 sc1) (CaseMotiveCons a2 sc2)

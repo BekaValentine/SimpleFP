@@ -164,6 +164,7 @@ solve eqs0 = go eqs0 []
            go (argEqs ++ motEqs ++ clauseEqs ++ eqs) subs'
     go (Equation m m':_) _ = throwError $ "Terms not equal: " ++ show m ++ " and " ++ show m'
     
+    goCaseMotive :: CaseMotive -> CaseMotive -> TypeChecker [Equation]
     goCaseMotive (CaseMotiveNil a1) (CaseMotiveNil a2)
       = return [Equation a1 a2]
     goCaseMotive (CaseMotiveCons a1 sc1) (CaseMotiveCons a2 sc2)
