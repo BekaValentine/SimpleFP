@@ -11,7 +11,6 @@ import DependentImplicit.Core.Abstraction
 import DependentImplicit.Core.ConSig
 import DependentImplicit.Core.Program
 import DependentImplicit.Core.Term
-
 import DependentImplicit.Unification.TypeChecking
 
 
