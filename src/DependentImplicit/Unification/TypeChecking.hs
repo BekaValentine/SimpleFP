@@ -367,7 +367,7 @@ inferify Type
 inferify (Fun plic arg sc)
   = do arg' <- checkify arg Type
        i <- newName
-       ret' <- extendContext [(i,arg)]
+       ret' <- extendContext [(i,arg')]
                  $ checkify (instantiate sc [Var (Generated i)]) Type
        let sc' :: Scope Term Term
            sc' = Scope (names sc) $ \[v] -> runReader (abstract ret') [(i,v)]
@@ -690,7 +690,7 @@ checkifyConSig (ConSigNil ret)
 checkifyConSig (ConSigCons plic arg sc)
   = do arg' <- checkify arg Type
        i <- newName
-       t <- extendContext [(i,arg)]
+       t <- extendContext [(i,arg')]
               $ checkifyConSig (instantiate sc [Var (Generated i)])
        return (ConSigCons plic arg' (Scope (names sc) $ \[v] -> runReader (abstract t) [(i,v)]))
 
