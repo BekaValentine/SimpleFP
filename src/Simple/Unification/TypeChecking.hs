@@ -102,9 +102,10 @@ occurs x (Fun a b) = occurs x a || occurs x b
 occurs x (Meta y)  = x == y
 
 
-solve :: [Equation] -> Either String Substitution
+solve :: [Equation] -> TypeChecker Substitution
 solve eqs0 = go eqs0 []
   where
+    go :: [Equation] -> Substitution -> TypeChecker Substitution
     go [] subs' = return subs'
     go (Equation (Meta x) (Meta y) : eqs) subs' | x == y
       = go eqs subs'
@@ -148,11 +149,8 @@ addSubstitutions subs0
 
 unify :: Type -> Type -> TypeChecker ()
 unify p q
-  = case solve [Equation p q] of
-      Left e -> throwError $ "Cannot unify type: " ++ show p ++ "\n"
-                          ++ "With type: " ++ show q ++ "\n"
-                          ++ "With unification error: " ++ e
-      Right subs' -> addSubstitutions subs'
+  = do subs' <-  solve [Equation p q]
+       addSubstitutions subs'
 
 instantiateMetas :: Substitution -> Type -> Type
 instantiateMetas _ (TyCon tycon)
