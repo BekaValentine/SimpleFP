@@ -352,7 +352,9 @@ inferify (Case ms0 mot cs)
   = do checkifyCaseMotive mot
        checkifyCaseArgs ms0 mot
        checkifyClauses cs mot
-       auxMotive ms0 mot
+       ret <- auxMotive ms0 mot
+       subs <- substitution
+       return (instantiateMetas subs ret)
   where
     checkifyCaseArgs [] (CaseMotiveNil _)
       = return ()
@@ -425,7 +427,10 @@ checkifyPattern (ConPat c ps) t
        et <- evaluate t
        eret <- evaluate ret
        unify et eret
-       return (ctx, Con c xs)
+       subs <- substitution
+       return ( map (\(x,t) -> (x, instantiateMetas subs t)) ctx
+              , instantiateMetas subs (Con c xs)
+              )
   where
     checkifyPatConArgs _ PatternSeqNil (ConSigNil ret)
       = return ([],[],ret)

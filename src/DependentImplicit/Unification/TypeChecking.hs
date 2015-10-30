@@ -585,7 +585,10 @@ checkifyPattern (ConPat c ps0) t
        eret <- evaluate ret
        unify et eret
        subs <- substitution
-       return (instantiateMetasPat subs (ConPat c ps'), ctx, instantiateMetas subs (Con c xs))
+       return ( instantiateMetasPat subs (ConPat c ps')
+              , map (\(x,t) -> (x, instantiateMetas subs t)) ctx
+              , instantiateMetas subs (Con c xs)
+              )
   where
     checkifyPatConArgs :: ConSig Term -> PatternSeq -> ConSig Term -> TypeChecker (PatternSeq,Context,[(Plicity,Term)],Term)
     checkifyPatConArgs _ PatternSeqNil (ConSigNil ret)
