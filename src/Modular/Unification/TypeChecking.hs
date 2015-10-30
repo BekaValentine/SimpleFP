@@ -679,7 +679,7 @@ checkify (Lam plic sc) t
                           (Lam Expl sc)
                           eret
               subs <- substitution
-              return (instantiateMetas subs (Lam Impl (Scope (names sc) $ \_ -> f')))
+              return (instantiateMetas subs (Lam Impl (Scope ["_"] $ \_ -> f')))
          (Impl, Fun Expl _ _) -> -- \{y} -> M : (x : A) -> B
            throwError $ "Expected an explicit argument but found an implicit argument "
                   ++ "when checking " ++ show (Lam plic sc)
