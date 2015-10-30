@@ -21,11 +21,12 @@ library
                        DependentImplicit.Unification.REPL,
                        Simple.Monadic.REPL,
                        Simple.Unification.REPL,
-                       Poly.Unification.REPL
+                       Poly.Unification.REPL,
+                       Modular.Unification.REPL
                        
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.7 && <4.8,
+  build-depends:       base,
                        containers,
                        mtl,
                        parsec,
