@@ -184,7 +184,7 @@ instance ParenRec Term where
     = let n0' = unwords (names sc)
           n' = case plic of
                  Expl -> n0'
-                 Impl -> "{" ++ n' ++ "}"
+                 Impl -> "{" ++ n0' ++ "}"
       in "\\" ++ n'
       ++ " -> " ++ parenthesize (Just LamBody)
                      (instantiate sc [ Var (Name x) | x <- names sc ])
