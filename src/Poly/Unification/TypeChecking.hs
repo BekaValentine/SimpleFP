@@ -134,7 +134,7 @@ occurs x (TyCon _ args) = any (occurs x) args
 occurs x (Fun a b)      = occurs x a || occurs x b
 occurs x (Meta y)       = x == y
 occurs _ (TyVar _)      = False
-occurs x (Forall sc)    = occurs x (instantiate sc (repeat (TyVar undefined)))
+occurs x (Forall sc)    = occurs x (descope (TyVar . TyName) sc)
 
 
 solve :: [Equation] -> TypeChecker Substitution

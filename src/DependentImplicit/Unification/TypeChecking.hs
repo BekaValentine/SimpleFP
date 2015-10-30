@@ -89,17 +89,17 @@ occurs x (Meta y)         = x == y
 occurs _ (Var _)          = False
 occurs x (Ann m t)        = occurs x m || occurs x t
 occurs _ Type             = False
-occurs x (Fun _ a sc)     = occurs x a || occurs x (instantiate sc (repeat (Var undefined)))
-occurs x (Lam _ sc)       = occurs x (instantiate sc (repeat (Var undefined)))
+occurs x (Fun _ a sc)     = occurs x a || occurs x (descope (Var . Name) sc)
+occurs x (Lam _ sc)       = occurs x (descope (Var . Name) sc)
 occurs x (App _ f a)      = occurs x f || occurs x a
 occurs x (Con _ as)       = any (occurs x . snd) as
 occurs x (Case as mot cs) = any (occurs x) as || occursCaseMotive mot || any occursClause cs
   where
     occursCaseMotive (CaseMotiveNil m) = occurs x m
     occursCaseMotive (CaseMotiveCons a sc)
-      = occurs x a || occursCaseMotive (instantiate sc (repeat (Var undefined)))
+      = occurs x a || occursCaseMotive (descope (Var . Name) sc)
     
-    occursClause (Clause _ sc) = occurs x (instantiate sc (repeat (Var undefined)))
+    occursClause (Clause _ sc) = occurs x (descope (Var . Name) sc)
 
 solve :: [Equation] -> TypeChecker Substitution
 solve eqs0 = go eqs0 []
