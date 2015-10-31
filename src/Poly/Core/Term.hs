@@ -91,7 +91,7 @@ instance ParenRec Term where
   parenRec (Lam sc)
     = "\\" ++ unwords (names sc) ++ " -> "
    ++ parenthesize (Just LamBody)
-        (instantiate sc [ Var (Name x) | x <- names sc ])
+        (descope (Var . Name) sc)
   parenRec (App f a)
     = parenthesize (Just AppLeft) f ++ " " ++ parenthesize (Just AppRight) a
   parenRec (Con c [])
@@ -104,7 +104,7 @@ instance ParenRec Term where
     where
       auxClause (Clause p sc)
         = parenthesize Nothing p ++ " -> "
-       ++ parenthesize Nothing (instantiate sc [ Var (Name x) | x <- names sc ])
+       ++ parenthesize Nothing (descope (Var . Name) sc)
 
 instance Show Term where
   show t = parenthesize Nothing t

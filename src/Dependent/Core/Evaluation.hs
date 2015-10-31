@@ -28,7 +28,7 @@ matchPatternSeq PatternSeqNil []
   = Just []
 matchPatternSeq (PatternSeqCons p sc) (m:ms)
   = do vs <- matchPattern p m
-       vs' <- matchPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ]) ms
+       vs' <- matchPatternSeq (descope (Var . Name) sc) ms
        return $ vs ++ vs'
 matchPatternSeq _ _
   = Nothing

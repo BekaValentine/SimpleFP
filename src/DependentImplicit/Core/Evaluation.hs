@@ -39,7 +39,7 @@ matchPatternSeq PatternSeqNil []
 matchPatternSeq (PatternSeqCons plic p sc) ((plic',m):ms)
   | plic == plic'
     = do vs <- matchPattern p m
-         vs' <- matchPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ]) ms
+         vs' <- matchPatternSeq (descope (Var . Name) sc) ms
          return $ vs ++ vs'
   | otherwise
     = error "Mismatching plicity in pattern match."

@@ -108,13 +108,13 @@ data PatternSeq
 caseMotiveLength :: CaseMotive -> Int
 caseMotiveLength (CaseMotiveNil _) = 0
 caseMotiveLength (CaseMotiveCons _ sc)
-  = 1 + caseMotiveLength (instantiate sc [ Var (Name x) | x <- names sc ])
+  = 1 + caseMotiveLength (descope (Var . Name) sc)
 
 -- Pattern Sequence Length
 patternSeqLength :: PatternSeq -> Int
 patternSeqLength PatternSeqNil = 0
 patternSeqLength (PatternSeqCons _ _ sc)
-  = 1 + patternSeqLength (instantiate sc [ Var (Name x) | x <- names sc ])
+  = 1 + patternSeqLength (descope (Var . Name) sc)
 
 
 
@@ -150,7 +150,7 @@ instance ParenRec Pattern where
               p' = case plic of
                      Expl -> p0'
                      Impl -> "{" ++ p0' ++ "}"
-              mps' = auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
+              mps' = auxPatternSeq (descope (Var . Name) sc)
           in case mps' of
                Nothing  -> Just [p']
                Just ps' -> Just (p':ps')
@@ -167,7 +167,7 @@ instance Show PatternSeq where
           arg' = case plic of
                    Expl -> arg0'
                    Impl -> "{" ++ arg0' ++ "}"
-      in case instantiate sc [ Var (Name x) | x <- names sc ] of
+      in case descope (Var . Name) sc of
            PatternSeqNil -> arg'
            ret           -> arg' ++ " || " ++ show ret
 
@@ -224,7 +224,7 @@ instance ParenRec Term where
                  Impl -> "{" ++ a0' ++ "}"
       in a' ++ " -> "
       ++ parenthesize (Just FunRet)
-           (instantiate sc [ Var (Name x) | x <- names sc ])
+           (descope (Var . Name) sc)
   parenRec (Lam plic sc)
     = let n0' = unwords (names sc)
           n' = case plic of
@@ -232,7 +232,7 @@ instance ParenRec Term where
                  Impl -> "{" ++ n0' ++ "}"
       in "\\" ++ n'
       ++ " -> " ++ parenthesize (Just LamBody)
-                     (instantiate sc [ Var (Name x) | x <- names sc ])
+                     (descope (Var . Name) sc)
   parenRec (App plic f a)
     = let a' = case plic of
                  Expl -> parenthesize (Just ExplAppRight) a
@@ -255,14 +255,14 @@ instance ParenRec Term where
       auxClause (Clause ps sc)
         = intercalate " || " (auxPatternSeq ps)
           ++ " -> " ++ parenthesize Nothing
-                         (instantiate sc [ Var (Name x) | x <- names sc ])
+                         (descope (Var . Name) sc)
       
       auxPatternSeq :: PatternSeq -> [String]
       auxPatternSeq PatternSeqNil
         = []
       auxPatternSeq (PatternSeqCons _ p sc)
         = let p' = parenthesize Nothing p
-              ps' = auxPatternSeq (instantiate sc [ Var (Name x) | x <- names sc ])
+              ps' = auxPatternSeq (descope (Var . Name) sc)
           in p':ps'
   parenRec (OpenIn settings m)
     = "open " ++ intercalate " | " (map show settings) ++ " in " ++ parenthesize Nothing m ++ " end"
@@ -278,4 +278,4 @@ instance Show CaseMotive where
   show (CaseMotiveNil ret) = show ret
   show (CaseMotiveCons arg sc)
     = "(" ++ unwords (names sc) ++ " : " ++ show arg ++ ") || "
-   ++ show (instantiate sc [ Var (Name x) | x <- names sc ])
+   ++ show (descope (Var . Name) sc)
