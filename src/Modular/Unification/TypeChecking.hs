@@ -113,7 +113,7 @@ occurs x (Case as mot cs) = any (occurs x) as || occursCaseMotive mot || any occ
     occursCaseMotive (CaseMotiveCons a sc)
       = occurs x a || occursCaseMotive (descope (Var . Name) sc)
     
-    occursClause (Clause p sc) = occurs x (descope (Var . Name) sc)
+    occursClause (Clause _ sc) = occurs x (descope (Var . Name) sc)
 occurs x (OpenIn _ m)     = occurs x m
 
 solve :: [Equation] -> TypeChecker Substitution
@@ -757,7 +757,7 @@ checkifyPattern (ConPat c ps0) t
        unify et eret
        subs <- substitution
        return ( instantiateMetasPat subs (ConPat unaliasedC ps')
-              , map (\(x,t) -> (x, instantiateMetas subs t)) ctx
+              , map (\(x,t') -> (x, instantiateMetas subs t')) ctx
               , instantiateMetas subs (Con unaliasedC xs)
               )
   where
