@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module Modular.Unification.TypeChecking where
-import System.IO.Unsafe
+
 import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.Reader
