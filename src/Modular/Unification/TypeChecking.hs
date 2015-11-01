@@ -113,7 +113,14 @@ occurs x (Case as mot cs) = any (occurs x) as || occursCaseMotive mot || any occ
     occursCaseMotive (CaseMotiveCons a sc)
       = occurs x a || occursCaseMotive (descope (Var . Name) sc)
     
-    occursClause (Clause _ sc) = occurs x (descope (Var . Name) sc)
+    occursClause (Clause ps sc) = occursPatternSeq ps || occurs x (descope (Var . Name) sc)
+    
+    occursPattern (VarPat _) = False
+    occursPattern (ConPat _ xs) = occursPatternSeq xs
+    occursPattern (AssertionPat m) = occurs x m
+    
+    occursPatternSeq PatternSeqNil = False
+    occursPatternSeq (PatternSeqCons _ p sc) = occursPattern p || occursPatternSeq (descope (Var . Name) sc)
 occurs x (OpenIn _ m)     = occurs x m
 
 solve :: [Equation] -> TypeChecker Substitution
