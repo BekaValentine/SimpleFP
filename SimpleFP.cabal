@@ -16,13 +16,14 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Dependent.Monadic.REPL,
-                       Dependent.Unification.REPL,
-                       DependentImplicit.Unification.REPL,
-                       Simple.Monadic.REPL,
+  exposed-modules:     Simple.Monadic.REPL,
                        Simple.Unification.REPL,
                        Poly.Unification.REPL,
-                       Modular.Unification.REPL
+                       Dependent.Monadic.REPL,
+                       Dependent.Unification.REPL,
+                       DependentImplicit.Unification.REPL,
+                       Modular.Unification.REPL,
+                       Record.Unification.REPL
                        
   -- other-modules:
   -- other-extensions:
