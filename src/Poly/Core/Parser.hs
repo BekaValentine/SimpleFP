@@ -103,7 +103,7 @@ parens = Token.parens tokenParser
 
 -- names
 
-varName = do lookAhead lower
+varName = do lookAhead (lower <|> char '_')
              identifier
 
 decName = do lookAhead upper
@@ -124,7 +124,9 @@ funType = do arg <- try $ do
              ret <- funRight
              return $ Fun arg ret
 
-typeVar = TyVar <$> (TyName <$> varName)
+typeVar = do x <- varName
+             guard (x /= "_")
+             return $ TyVar (TyName x)
 
 forallType = do _ <- reserved "forall"
                 x <- varName
@@ -148,7 +150,9 @@ datatype = funType <|> parenType <|> forallType <|> typeCon <|> typeVar
 
 -- term parsers
 
-variable = (Var . Name) <$> varName
+variable = do x <- varName
+              guard (x /= "_")
+              return $ Var (Name x)
 
 annotation = do m <- try $ do
                   m <- annLeft

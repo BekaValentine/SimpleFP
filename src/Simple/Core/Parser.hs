@@ -83,7 +83,7 @@ parens = Token.parens tokenParser
 
 -- names
 
-varName = do lookAhead lower
+varName = do lookAhead (lower <|> char '_')
              identifier
 
 decName = do lookAhead upper
@@ -112,7 +112,9 @@ datatype = funType <|> typeCon <|> parenType
 
 -- term parsers
 
-variable = (Var . Name) <$> varName
+variable = do x <- varName
+              guard (x /= "_")
+              return $ Var (Name x)
 
 annotation = do m <- try $ do
                   m <- annLeft
