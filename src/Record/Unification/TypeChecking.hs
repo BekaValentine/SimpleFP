@@ -608,7 +608,7 @@ inferify (Fun plic arg sc)
        ret' <- extendContext [(i,arg')]
                  $ checkify (instantiate sc [Var (Generated i)]) Type
        let sc' :: Scope Term Term
-           sc' = Scope (names sc) $ \[v] -> runReader (abstract ret') [(i,v)]
+           sc' = Scope (names sc) (abstractOver [i] ret')
        subs <- substitution
        return (instantiateMetas subs (Fun plic arg' sc'), Type)
 inferify (Lam _ _)
@@ -721,7 +721,7 @@ inferify (RecordType tele)
            i <- newName
            m' <- extendContext [(i,t')]
                    $ checkifyTelescope (instantiate sc [Var (Generated i)])
-           return (TelescopeCons x t' (Scope (names sc) $ \[v] -> runReader (abstract m') [(i,v)]))
+           return (TelescopeCons x t' (Scope (names sc) (abstractOver [i] m')))
 inferify (RecordCon _)
   = throwError "Cannot infer the type of a record expression."
 inferify (RecordDot m x)
@@ -755,7 +755,7 @@ checkify (Lam plic sc) t
                           (instantiate sc [Var (Generated i)])
                           eret
               subs <- substitution
-              return (instantiateMetas subs (Lam Expl (Scope (names sc) $ \[v] -> runReader (abstract m') [(i,v)])))
+              return (instantiateMetas subs (Lam Expl (Scope (names sc) (abstractOver [i] m'))))
          (Impl, Fun Impl arg sc') -> -- \{y} -> M : {y : A} -> B
            do i <- newName
               eret <- evaluate (instantiate sc' [Var (Generated i)])
@@ -764,7 +764,7 @@ checkify (Lam plic sc) t
                           (instantiate sc [Var (Generated i)])
                           eret
               subs <- substitution
-              return (instantiateMetas subs (Lam Impl (Scope (names sc) $ \[v] -> runReader (abstract m') [(i,v)])))
+              return (instantiateMetas subs (Lam Impl (Scope (names sc) (abstractOver [i] m'))))
          (Expl, Fun Impl arg sc') -> -- \x -> M : {y : A} -> B
            do i <- newName
               eret <- evaluate (instantiate sc' [Var (Generated i)])
@@ -773,7 +773,7 @@ checkify (Lam plic sc) t
                           (Lam Expl sc)
                           eret
               subs <- substitution
-              return (instantiateMetas subs (Lam Impl (Scope ["_"] $ \_ -> f')))
+              return (instantiateMetas subs (Lam Impl (Scope ["_"] (abstractOver ([]::[String]) f'))))
          (Impl, Fun Expl _ _) -> -- \{y} -> M : (x : A) -> B
            throwError $ "Expected an explicit argument but found an implicit argument "
                   ++ "when checking " ++ show (Lam plic sc)
@@ -857,7 +857,7 @@ checkifyCaseMotive (CaseMotiveCons a sc)
        b' <- extendContext [(i,a')]
                $ checkifyCaseMotive (instantiate sc [Var (Generated i)])
        subs <- substitution
-       return (instantiateMetasCaseMotive subs (CaseMotiveCons a' (Scope (names sc) $ \[v] -> runReader (abstract b') [(i,v)])))
+       return (instantiateMetasCaseMotive subs (CaseMotiveCons a' (Scope (names sc) (abstractOver [i] b'))))
 
 checkifyPattern :: Pattern -> Term -> TypeChecker (Pattern,Context,Term)
 checkifyPattern (VarPat x) t
@@ -886,7 +886,7 @@ checkifyPattern (ConPat c ps0) t
            (ps',ctx',xs,ret) <-
              extendContext ctx
                $ checkifyPatConArgs consig (instantiate sc is) (instantiate sc' [x])
-           return ( PatternSeqCons Expl p' (Scope (names sc) $ \vs -> runReader (abstract ps') (zip rawIs vs))
+           return ( PatternSeqCons Expl p' (Scope (names sc) (abstractOver rawIs ps'))
                   , ctx++ctx'
                   , (Expl,x):xs
                   , ret
@@ -899,7 +899,7 @@ checkifyPattern (ConPat c ps0) t
            (ps',ctx',xs,ret) <-
              extendContext ctx
                $ checkifyPatConArgs consig (instantiate sc is) (instantiate sc' [x])
-           return ( PatternSeqCons Impl p' (Scope (names sc) $ \vs -> runReader (abstract ps') (zip rawIs vs))
+           return ( PatternSeqCons Impl p' (Scope (names sc) (abstractOver rawIs ps'))
                   , ctx++ctx'
                   , (Impl,x):xs
                   , ret
@@ -911,7 +911,7 @@ checkifyPattern (ConPat c ps0) t
                                   consig
                                   ps
                                   (instantiate sc' [x])
-           return ( PatternSeqCons Impl (AssertionPat x) (Scope (names sc') $ \_ -> ps')
+           return ( PatternSeqCons Impl (AssertionPat x) (Scope (names sc') (abstractOver ([]::[String]) ps'))
                   , ctx'
                   , (Impl,x):xs
                   , ret
@@ -953,7 +953,7 @@ checkifyClause (Clause ps sc0) motive
            (ps',ctx',ret) <-
              extendContext ctx
                $ checkPatternSeqMotive (instantiate sc xs) (instantiate sc' [x])
-           return ( PatternSeqCons plic p' (Scope (names sc) $ \vs -> runReader (abstract ps') (zip is vs))
+           return ( PatternSeqCons plic p' (Scope (names sc) (abstractOver is ps'))
                   , ctx++ctx'
                   , ret
                   )
@@ -982,7 +982,7 @@ checkifyConSig (ConSigCons plic arg sc)
        i <- newName
        t <- extendContext [(i,arg')]
               $ checkifyConSig (instantiate sc [Var (Generated i)])
-       return (ConSigCons plic arg' (Scope (names sc) $ \[v] -> runReader (abstract t) [(i,v)]))
+       return (ConSigCons plic arg' (Scope (names sc) (abstractOver [i] t)))
 
 
 
