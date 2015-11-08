@@ -15,18 +15,15 @@ abstractScope (Scope ns f)
       Scope ns $ \vs' -> runReader (abstract (f vs')) e
 
 scope :: Abstract String s a => [String] -> a -> Scope s a
-scope xs m = Scope xs (abstractOver xs m)
-
-scopeWithDummies :: Abstract String s a => [Maybe String] -> a -> Scope s a
-scopeWithDummies xs m = Scope (nameDummies xs) (abstractOverDummies xs m)
-  where
-    nameDummies = map $ \mn ->
-                    case mn of
-                      Nothing -> "_"
-                      Just n  -> n
+scope xs m = Scope xs (abstractOverDummies xs m)
 
 descope :: (String -> s) -> Scope s a -> a
 descope f sc = instantiate sc (map f (names sc))
 
 instance Functor (Scope s) where
   fmap f (Scope ns b) = Scope ns (f . b)
+
+
+
+helperFold :: (a -> b -> b) -> [a] -> b -> b
+helperFold c xs n = foldr c n xs

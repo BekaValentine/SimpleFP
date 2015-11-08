@@ -1,4 +1,5 @@
 {-# OPTIONS -Wall #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Abs where
@@ -16,10 +17,10 @@ abstractOver :: Abstract i e a => [i] -> a -> [e] -> a
 abstractOver [] m _  = m
 abstractOver xs m vs = runReader (abstract m) (zip xs vs)
 
-abstractOverDummies :: Abstract i e a => [Maybe i] -> a -> [e] -> a
-abstractOverDummies xs m vs = runReader (abstract m) (zipDummies xs vs)
+abstractOverDummies :: Abstract String e a => [String] -> a -> [e] -> a
+abstractOverDummies ns m vs = runReader (abstract m) (zipDummies ns vs)
   where
-    zipDummies :: [Maybe a] -> [b] -> [(a,b)]
-    zipDummies (Nothing:xs) (_:ys) = zipDummies xs ys
-    zipDummies (Just x:xs)  (y:ys) = (x,y) : zipDummies xs ys
+    zipDummies :: [String] -> [b] -> [(String,b)]
+    zipDummies ("_":xs) (_:ys) = zipDummies xs ys
+    zipDummies (x:xs)  (y:ys) = (x,y) : zipDummies xs ys
     zipDummies _ _ = []

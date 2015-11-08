@@ -73,22 +73,31 @@ annotation = do m <- try $ do
 typeType = do _ <- reserved "Type"
               return Type
 
-funType = do (x,arg) <- try $ do
-                        (x,arg) <- parens $ do
-                          x <- varName
-                          _ <- reservedOp ":"
-                          arg <- funArg
-                          return (x,arg)
-                        _ <- reservedOp "->"
-                        return (x,arg)
-             ret <- funRet
-             return $ funHelper x arg ret --Fun x arg ret
+binderFunType = do (xs,arg) <- try $ do
+                     (xs,arg) <- parens $ do
+                       xs <- many1 varName
+                       _ <- reservedOp ":"
+                       arg <- term
+                       return (xs,arg)
+                     _ <- reservedOp "->"
+                     return (xs,arg)
+                   ret <- funRet
+                   return $ helperFold (\x -> funHelper x arg) xs ret
+
+noBinderFunType = do arg <- try $ do
+                       arg <- funArg
+                       _ <- reservedOp "->"
+                       return arg
+                     ret <- funRet
+                     return $ funHelper "_" arg ret
+
+funType = binderFunType <|> noBinderFunType
 
 lambda = do _ <- reservedOp "\\"
-            x <- varName
+            xs <- many1 varName
             _ <- reservedOp "->"
             b <- lamBody
-            return $ lamHelper x b --Lam x b
+            return $ helperFold lamHelper xs b
 
 application = do (f,a) <- try $ do
                    f <- appFun
@@ -146,14 +155,14 @@ patternSeqCons = do (p,xs) <- try $ do
 
 patternSeq = patternSeqCons <|> patternSeqConsNil
 
-consMotive = do (x,a) <- try $ parens $ do
-                  x <- varName
+consMotive = do (xs,a) <- try $ parens $ do
+                  xs <- many1 varName
                   _ <- reservedOp ":"
                   a <- term
-                  return (x,a)
+                  return (xs,a)
                 _ <- reservedOp "||"
                 b <- caseMotive
-                return $ consMotiveHelper x a b
+                return $ helperFold (\x -> consMotiveHelper x a) xs b
 
 nilMotive = CaseMotiveNil <$> term
 
@@ -182,7 +191,7 @@ annLeft = application <|> parenTerm <|> conData <|> variable <|> typeType
 
 annRight = funType <|> application <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType
 
-funArg = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType
+funArg = application <|> parenTerm <|> conData <|> caseExp <|> variable <|> typeType
 
 funRet = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType
 
@@ -216,16 +225,19 @@ termDecl = do _ <- reserved "let"
               return $ TermDeclaration x t m
 
 alternative = do c <- decName
-                 as <- many alternativeArg
+                 as <- alternativeArgs
                  _ <- reservedOp ":"
                  t <- term
                  return (c,conSigHelper as t)
 
+alternativeArgs = do argss <- many alternativeArg
+                     return (concat argss)
+
 alternativeArg = parens $ do
-                   x <- varName
+                   xs <- many1 varName
                    _ <- reservedOp ":"
                    t <- term
-                   return $ DeclArg x t
+                   return $ [ DeclArg x t | x <- xs ]
 
 emptyTypeDecl = do (tycon,tyargs) <- try $ do
                      _ <- reserved "data"

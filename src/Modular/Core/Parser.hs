@@ -121,45 +121,53 @@ annotation = do m <- try $ do
 typeType = do _ <- reserved "Type"
               return Type
 
-explFunType = do (x,arg) <- try $ do
-                              (x,arg) <- parens $ do
-                                x <- varName
-                                _ <- reservedOp ":"
-                                arg <- funArg
-                                return (x,arg)
-                              _ <- reservedOp "->"
-                              return (x,arg)
+explFunType = do (xs,arg) <- try $ do
+                   (xs,arg) <- parens $ do
+                     xs <- many1 varName
+                     _ <- reservedOp ":"
+                     arg <- term
+                     return (xs,arg)
+                   _ <- reservedOp "->"
+                   return (xs,arg)
                  ret <- funRet
-                 return $ funHelper Expl x arg ret
+                 return $ helperFold (\x -> funHelper Expl x arg) xs ret
 
-implFunType = do (x,arg) <- try $ do
-                              (x,arg) <- braces $ do
-                                x <- varName
-                                _ <- reservedOp ":"
-                                arg <- funArg
-                                return (x,arg)
-                              _ <- reservedOp "->"
-                              return (x,arg)
+implFunType = do (xs,arg) <- try $ do
+                   (xs,arg) <- braces $ do
+                     xs <- many1 varName
+                     _ <- reservedOp ":"
+                     arg <- term
+                     return (xs,arg)
+                   _ <- reservedOp "->"
+                   return (xs,arg)
                  ret <- funRet
-                 return $ funHelper Impl x arg ret
+                 return $ helperFold (\x -> funHelper Impl x arg) xs ret
 
-funType = explFunType <|> implFunType
+binderFunType = explFunType <|> implFunType
 
-explLambda = do x <- try $ do
-                  _ <- reservedOp "\\"
-                  varName
-                _ <- reservedOp "->"
-                b <- lamBody
-                return $ lamHelper Expl x b
+noBinderFunType = do arg <- try $ do
+                       arg <- funArg
+                       _ <- reservedOp "->"
+                       return arg
+                     ret <- funRet
+                     return $ funHelper Expl "_" arg ret
 
-implLambda = do x <- try $ do
-                  _ <- reservedOp "\\"
-                  braces varName
-                _ <- reservedOp "->"
-                b <- lamBody
-                return $ lamHelper Impl x b
+funType = binderFunType <|> noBinderFunType
 
-lambda = explLambda <|> implLambda
+explArg = do x <- varName
+             return (Expl,x)
+
+implArg = do x <- braces varName
+             return (Impl,x)
+
+lambdaArg = explArg <|> implArg
+
+lambda = do xs <- try $ do
+              _ <- reservedOp "\\"
+              many1 lambdaArg
+            _ <- reservedOp "->"
+            b <- lamBody
+            return $ helperFold (\(plic,x) -> lamHelper plic x) xs b
 
 application = do (f,pa) <- try $ do
                    f <- appFun
@@ -237,14 +245,14 @@ patternSeqCons = do (p,xs) <- try $ do
 
 patternSeq = patternSeqCons <|> patternSeqConsNil
 
-consMotive = do (x,a) <- try $ parens $ do
-                  x <- varName
+consMotive = do (xs,a) <- try $ parens $ do
+                  xs <- many1 varName
                   _ <- reservedOp ":"
                   a <- term
-                  return (x,a)
+                  return (xs,a)
                 _ <- reservedOp "||"
                 b <- caseMotive
-                return $ consMotiveHelper x a b
+                return $ helperFold (\x -> consMotiveHelper x a) xs b
 
 nilMotive = CaseMotiveNil <$> term
 
@@ -281,7 +289,7 @@ annLeft = application <|> parenTerm <|> dottedVar <|> conData <|> variable <|> t
 
 annRight = funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
-funArg = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
+funArg = application <|> parenTerm <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
 
 funRet = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
 
@@ -335,24 +343,27 @@ termDecl = do _ <- reserved "let"
               return $ TermDeclaration x t m
 
 alternative = do c <- decName
-                 as <- many alternativeArg
+                 as <- alternativeArgs
                  _ <- reservedOp ":"
                  t <- term
                  return (c,conSigHelper as t)
 
 explAlternativeArg = parens $ do
-                       x <- varName
+                       xs <- many1 varName
                        _ <- reservedOp ":"
                        t <- term
-                       return $ DeclArg Expl x t
+                       return $ [ DeclArg Expl x t | x <- xs ]
 
 implAlternativeArg = braces $ do
-                       x <- varName
+                       xs <- many1 varName
                        _ <- reservedOp ":"
                        t <- term
-                       return $ DeclArg Impl x t
+                       return $ [ DeclArg Impl x t | x <- xs ]
 
 alternativeArg = explAlternativeArg <|> implAlternativeArg
+
+alternativeArgs = do argss <- many alternativeArg
+                     return (concat argss)
 
 emptyTypeDecl = do (tycon,tyargs) <- try $ do
                      _ <- reserved "data"
