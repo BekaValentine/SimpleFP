@@ -124,10 +124,10 @@ annotation = do m <- try $ do
                 return $ Ann m t
 
 lambda = do _ <- reservedOp "\\"
-            x <- varName
+            xs <- many1 varName
             _ <- reservedOp "->"
             b <- lamBody
-            return $ lamHelper x b
+            return $ helperFold lamHelper xs b
 
 application = do (f,a) <- try $ do
                    f <- appFun
