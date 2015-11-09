@@ -42,13 +42,13 @@ instance Abstract String Term Term where
   abstract (Con c as)
     = Con c <$> mapM abstract as
   abstract (Case a cs)
-    = Case <$> abstract a <*> mapM abstractClause cs
+    = Case <$> mapM abstract a <*> mapM abstractClause cs
 
 lamHelper :: String -> Term -> Term
 lamHelper x b = Lam (scope [x] b)
 
-clauseHelper :: Pattern -> [String] -> Term -> Clause
-clauseHelper p xs b = Clause p (scope xs b)
+clauseHelper :: [Pattern] -> [String] -> Term -> Clause
+clauseHelper ps xs b = Clause ps (scope xs b)
 
 instance Abstract String Type Type where
   abstract (Meta i)
@@ -86,7 +86,7 @@ languageDef = Token.LanguageDef
               , Token.opStart = oneOf ""
               , Token.opLetter = oneOf ""
               , Token.reservedNames = ["data","case","of","end","where","let","forall"]
-              , Token.reservedOpNames = ["|","->","\\",":","=","."]
+              , Token.reservedOpNames = ["|","->","\\",":","=",".","||"]
               , Token.caseSensitive = True
               }
 
@@ -96,6 +96,7 @@ identifier = Token.identifier tokenParser
 reserved = Token.reserved tokenParser
 reservedOp = Token.reservedOp tokenParser
 parens = Token.parens tokenParser
+symbol = Token.symbol tokenParser
 
 
 
@@ -198,15 +199,17 @@ conPatternArg = parenPattern <|> noArgConPattern <|> varPattern
 
 pattern = parenPattern <|> conPattern <|> varPattern
 
-clause = do (p,xs) <- try $ do
-              p <- pattern
+clause = do psxs <- try $ do
+              psxs <- pattern `sepBy` reservedOp "||"
               _ <- reservedOp "->"
-              return p
+              return psxs
             b <- term
-            return $ clauseHelper p xs b --Clause p b
+            let ps = map fst psxs
+                xs = concat (map snd psxs)
+            return $ clauseHelper ps xs b
 
 caseExp = do _ <- reserved "case"
-             m <- caseArg
+             m <- caseArg `sepBy` reservedOp "||"
              _ <- reserved "of"
              _ <- optional (reservedOp "|")
              cs <- clause `sepBy` reservedOp "|"

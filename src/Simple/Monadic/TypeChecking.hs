@@ -149,21 +149,24 @@ infer (Con c as)
                    ++ " but was given " ++ show las
        zipWithM_ check as args
        return ret
-infer (Case m cs)
-  = do t <- infer m
-       inferClauses t cs
+infer (Case ms cs)
+  = do ts <- mapM infer ms
+       inferClauses ts cs
 
 
-inferClause :: Type -> Clause -> TypeChecker Type
-inferClause patTy (Clause p sc)
-  = do ctx' <- checkPattern p patTy
+inferClause :: [Type] -> Clause -> TypeChecker Type
+inferClause patTys (Clause ps sc)
+  = do unless (length patTys == length ps)
+         $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
+                     ++ " but found " ++ show (length ps)
+       ctx' <- fmap concat $ zipWithM checkPattern ps patTys
        let xs = [ Var (Generated i) | (i,_) <- ctx' ]
        extendContext ctx'
          $ infer (instantiate sc xs)
 
-inferClauses :: Type -> [Clause] -> TypeChecker Type
-inferClauses patTy cs
-  = do ts <- mapM (inferClause patTy) cs
+inferClauses :: [Type] -> [Clause] -> TypeChecker Type
+inferClauses patTys cs
+  = do ts <- mapM (inferClause patTys) cs
        case ts of
          [] -> throwError "Empty clauses."
          t:ts'

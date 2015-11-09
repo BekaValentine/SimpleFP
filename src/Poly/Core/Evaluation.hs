@@ -22,12 +22,15 @@ match (ConPat c ps) (Con c' as)
   = fmap concat (zipWithM match ps as)
 match _ _ = Nothing
 
-matchClauses :: [Clause] -> Term -> Maybe Term
+matchTerms :: [Pattern] -> [Term] -> Maybe [Term]
+matchTerms ps zs = fmap concat (zipWithM match ps zs)
+
+matchClauses :: [Clause] -> [Term] -> Maybe Term
 matchClauses [] _
   = Nothing
-matchClauses (Clause p sc:cs) v
-  = case match p v of
-      Nothing -> matchClauses cs v
+matchClauses (Clause ps sc:cs) vs
+  = case matchTerms ps vs of
+      Nothing -> matchClauses cs vs
       Just xs -> Just (instantiate sc xs)
 
 
@@ -55,8 +58,8 @@ instance Eval (Environment String Term) Term where
   eval (Con c as)
     = do eas <- mapM eval as
          return $ Con c eas
-  eval (Case m cs)
-    = do em <- eval m
-         case matchClauses cs em of
-           Nothing -> throwError $ "Incomplete pattern match: " ++ show (Case m cs)
+  eval (Case ms cs)
+    = do ems <- mapM eval ms
+         case matchClauses cs ems of
+           Nothing -> throwError $ "Incomplete pattern match: " ++ show (Case ms cs)
            Just b  -> eval b

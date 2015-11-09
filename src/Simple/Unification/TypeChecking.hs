@@ -241,21 +241,24 @@ inferify (Con c as)
                                      checkify m (instantiateMetas subs t)
                                      checkifyMulti ms ts
     checkifyMulti _      _      = throwError "Mismatched constructor signature lengths."
-inferify (Case m cs)
-  = do t <- inferify m
-       inferifyClauses t cs
+inferify (Case ms cs)
+  = do ts <- mapM inferify ms
+       inferifyClauses ts cs
 
-inferifyClause :: Type -> Clause -> TypeChecker Type
-inferifyClause patTy (Clause p sc)
-  = do ctx' <- checkifyPattern p patTy
+inferifyClause :: [Type] -> Clause -> TypeChecker Type
+inferifyClause patTys (Clause ps sc)
+  = do unless (length patTys == length ps)
+         $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
+                     ++ " but found " ++ show (length ps)
+       ctx' <- fmap concat $ zipWithM checkifyPattern ps patTys
        let xs = [ Var (Generated i) | (i,_) <- ctx' ]
        extendContext ctx'
          $ inferify (instantiate sc xs)
 
 
-inferifyClauses :: Type -> [Clause] -> TypeChecker Type
-inferifyClauses patTy cs
-  = do ts <- mapM (inferifyClause patTy) cs
+inferifyClauses :: [Type] -> [Clause] -> TypeChecker Type
+inferifyClauses patTys cs
+  = do ts <- mapM (inferifyClause patTys) cs
        case ts of
          [] -> throwError "Empty clauses."
          t:ts' -> do

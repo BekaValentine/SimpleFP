@@ -26,10 +26,10 @@ data Term
   | Lam (Scope Term Term)
   | App Term Term
   | Con String [Term]
-  | Case Term [Clause]
+  | Case [Term] [Clause]
 
 data Clause
-  = Clause Pattern (Scope Term Term)
+  = Clause [Pattern] (Scope Term Term)
 
 data Pattern
   = VarPat String
@@ -100,12 +100,12 @@ instance ParenRec Term where
     = c
   parenRec (Con c as)
     = c ++ " " ++ intercalate " " (map (parenthesize (Just ConArg)) as)
-  parenRec (Case a cs)
-    = "case " ++ parenthesize (Just CaseArg) a ++ " of "
+  parenRec (Case as cs)
+    = "case " ++ intercalate " || " (map (parenthesize (Just CaseArg)) as) ++ " of "
    ++ intercalate " | " (map auxClause cs) ++ " end"
     where
-      auxClause (Clause p sc)
-        = parenthesize Nothing p ++ " -> "
+      auxClause (Clause ps sc)
+        = intercalate " || " (map (parenthesize Nothing) ps) ++ " -> "
        ++ parenthesize Nothing
             (descope (Var . Name) sc)
 
