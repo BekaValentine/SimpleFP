@@ -250,17 +250,10 @@ assertionPatternArg = parenTerm <|> noArgConData <|> variable <|> typeType
 
 pattern = assertionPattern <|> parenPattern <|> conPattern <|> varPattern
 
-patternSeqConsNil = do (p,xs) <- pattern
-                       return (PatternSeqCons Expl p (scope xs PatternSeqNil), xs)
-
-patternSeqCons = do (p,xs) <- try $ do
-                      pxs <- pattern
-                      _ <- reservedOp "||"
-                      return pxs
-                    (ps,xs') <- patternSeq
-                    return (patternSeqHelper Expl p xs ps,xs++xs')
-
-patternSeq = patternSeqCons <|> patternSeqConsNil
+patternSeq = do psxs <- many pattern
+                return $ ( foldr (\(p,xs) ps -> patternSeqHelper Expl p xs ps) PatternSeqNil psxs
+                         , concat (map snd psxs)
+                         )
 
 consMotive = do (xs,a) <- try $ parens $ do
                   xs <- many1 varName
