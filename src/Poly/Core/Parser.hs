@@ -240,14 +240,44 @@ parseTerm str = case parse (spaces *> term <* eof) "(unknown)" str of
 
 -- program parsers
 
-termDecl = do _ <- reserved "let"
-              x <- varName
-              _ <- reservedOp ":"
-              t <- datatype
-              _ <- reservedOp "="
-              m <- term
-              _ <- reserved "end"
-              return $ TermDeclaration x t m
+eqTermDecl = do (x,t) <- try $ do
+                  _ <- reserved "let"
+                  x <- varName
+                  _ <- reservedOp ":"
+                  t <- datatype
+                  _ <- reservedOp "="
+                  return (x,t)
+                m <- term
+                _ <- reserved "end"
+                return $ TermDeclaration x t m
+
+whereTermDecl = do (x,t) <- try $ do
+                     _ <- reserved "let"
+                     x <- varName
+                     _ <- reservedOp ":"
+                     t <- datatype
+                     _ <- reserved "where"
+                     return (x,t)
+                   _ <- optional (reservedOp "|")
+                   clauses@(Clause ps _:_) <- patternMatchClause x `sepBy1` reservedOp "|"
+                   _ <- reserved "end"
+                   return $ TermDeclaration x t (lambdaAux (\as -> Case as clauses) (length ps))
+  where
+    lambdaAux :: ([Term] -> Term) -> Int -> Term
+    lambdaAux f 0 = f []
+    lambdaAux f n = Lam (Scope ["_" ++ show n] $ \[x] -> lambdaAux (f . (x:)) (n-1))
+
+patternMatchClause x = do _ <- symbol x
+                          psxs <- many patternMatchPattern
+                          _ <- reservedOp "="
+                          b <- term
+                          let ps = map fst psxs
+                              xs = concat (map snd psxs)
+                          return $ clauseHelper ps xs b
+
+patternMatchPattern = parenPattern <|> noArgConPattern <|> varPattern
+
+termDecl = eqTermDecl <|> whereTermDecl
 
 alternative = do c <- decName
                  as <- many alternativeArg
