@@ -88,7 +88,7 @@ addConstructor n consig
 elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
   = do when' (typeInDefinitions n)
-           $ fail ("Term already defined: " ++ n)
+           $ throwError ("Term already defined: " ++ n)
        liftTC (isType ty)
        liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
@@ -118,7 +118,7 @@ forallHelper x b = Forall (scope [x] b)
 elabAlt :: String -> [String] -> String -> [Type] -> Elaborator ()
 elabAlt tycon params n args
   = do when' (typeInSignature n)
-           $ fail ("Constructor already declared: " ++ n)
+           $ throwError ("Constructor already declared: " ++ n)
        let args' = mapM abstract args
            ret' = abstract (TyCon tycon (map (TyVar . TyName) params))
            consig' = ConSig (length params) (Scope params $ \vs ->
@@ -135,7 +135,7 @@ elabAlts tycon params ((n,args):cs) = do elabAlt tycon params n args
 elabTypeDecl :: TypeDeclaration -> Elaborator ()
 elabTypeDecl (TypeDeclaration tycon params alts)
   = do when' (isType (TyCon tycon (map (TyVar . TyName) params)))
-           $ fail ("Type constructor already declared: " ++ tycon)
+           $ throwError ("Type constructor already declared: " ++ tycon)
        addTypeConstructor tycon (length params)
        elabAlts tycon params alts
 

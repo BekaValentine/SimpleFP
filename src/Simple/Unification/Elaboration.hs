@@ -83,7 +83,7 @@ addConstructor tycon n args
 elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
   = do when' (typeInDefinitions n)
-           $ fail ("Term already defined: " ++ n)
+           $ throwError ("Term already defined: " ++ n)
        liftTC (isType ty)
        liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
@@ -93,7 +93,7 @@ elabTermDecl (TermDeclaration n ty def)
 elabAlt :: String -> String -> [Type] -> Elaborator ()
 elabAlt tycon n args
   = do when' (typeInSignature n)
-           $ fail ("Constructor already declared: " ++ n)
+           $ throwError ("Constructor already declared: " ++ n)
        liftTC (mapM_ isType args)
        addConstructor tycon n args
 
@@ -105,7 +105,7 @@ elabAlts tycon ((n,args):cs) = do elabAlt tycon n args
 elabTypeDecl :: TypeDeclaration -> Elaborator ()
 elabTypeDecl (TypeDeclaration tycon alts)
   = do when' (isType (TyCon tycon))
-           $ fail ("Type constructor already declared: " ++ tycon)
+           $ throwError ("Type constructor already declared: " ++ tycon)
        addTypeConstructor tycon
        elabAlts tycon alts
 

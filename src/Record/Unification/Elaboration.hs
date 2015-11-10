@@ -117,7 +117,7 @@ addConstructor c consig
 elabTermDecl :: TermDeclaration -> Elaborator ()
 elabTermDecl (TermDeclaration n ty def)
   = do when' (typeInDefinitions n)
-           $ fail ("Term already defined: " ++ n)
+           $ throwError ("Term already defined: " ++ n)
        ty' <- liftTC (check ty Type)
        m <- moduleName
        addAlias n
@@ -129,7 +129,7 @@ elabTermDecl (TermDeclaration n ty def)
 elabAlt :: String -> ConSig Term -> Elaborator ()
 elabAlt c consig
   = do when' (typeInSignature (BareCon c))
-           $ fail ("Constructor already declared: " ++ c)
+           $ throwError ("Constructor already declared: " ++ c)
        addAlias c
        consig' <- liftTC (checkifyConSig consig)
        addConstructor c consig'
@@ -138,7 +138,7 @@ elabTypeDecl :: TypeDeclaration -> Elaborator ()
 elabTypeDecl (TypeDeclaration tycon tyconargs alts)
   = do let tyconSig = conSigHelper tyconargs Type
        when' (typeInSignature (BareCon tycon))
-           $ fail ("Type constructor already declared: " ++ tycon)
+           $ throwError ("Type constructor already declared: " ++ tycon)
        addAlias tycon
        tyconSig' <- liftTC (checkifyConSig tyconSig)
        addConstructor tycon tyconSig'
