@@ -1,5 +1,6 @@
 {-# OPTIONS -Wall #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Abs where
@@ -12,6 +13,9 @@ type Abstracted i e a = Reader (Environment i e) a
 
 class Abstract i e a where
   abstract :: a -> Abstracted i e a
+
+instance Abstract i e a => Abstract i e [a] where
+  abstract = mapM abstract
 
 abstractOver :: Abstract i e a => [i] -> a -> [e] -> a
 abstractOver [] m _  = m
