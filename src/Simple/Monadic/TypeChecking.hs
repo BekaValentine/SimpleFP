@@ -155,14 +155,15 @@ infer (Case ms cs)
 
 
 inferClause :: [Type] -> Clause -> TypeChecker Type
-inferClause patTys (Clause ps sc)
-  = do unless (length patTys == length ps)
+inferClause patTys (Clause psc sc)
+  = do let lps = length (descope Name psc)
+       unless (length patTys == lps)
          $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
-                     ++ " but found " ++ show (length ps)
-       ctx' <- fmap concat $ zipWithM checkPattern ps patTys
-       let xs = [ Var (Generated i) | (i,_) <- ctx' ]
+                     ++ " but found " ++ show lps
+       is <- replicateM (length (names sc)) newName
+       ctx' <- fmap concat $ zipWithM checkPattern (instantiate psc (map Generated is)) patTys
        extendContext ctx'
-         $ infer (instantiate sc xs)
+         $ infer (instantiate sc (map (Var . Generated) is))
 
 inferClauses :: [Type] -> [Clause] -> TypeChecker Type
 inferClauses patTys cs
@@ -197,9 +198,10 @@ check m t
 
 
 checkPattern :: Pattern -> Type -> TypeChecker Context
-checkPattern (VarPat _) t
-  = do i <- newName
-       return [(i,t)]
+checkPattern (VarPat (Name _)) _
+  = return []
+checkPattern (VarPat (Generated i)) t
+  = return [(i,t)]
 checkPattern (ConPat c ps) t
   = do ConSig args ret <- typeInSignature c
        let lps = length ps

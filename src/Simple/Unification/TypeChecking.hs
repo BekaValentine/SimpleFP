@@ -246,14 +246,19 @@ inferify (Case ms cs)
        inferifyClauses ts cs
 
 inferifyClause :: [Type] -> Clause -> TypeChecker Type
-inferifyClause patTys (Clause ps sc)
-  = do unless (length patTys == length ps)
+inferifyClause patTys (Clause psc sc)
+  = do let lps = length (descope Name psc)
+       unless (length patTys == lps)
          $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
-                     ++ " but found " ++ show (length ps)
-       ctx' <- fmap concat $ zipWithM checkifyPattern ps patTys
-       let xs = [ Var (Generated i) | (i,_) <- ctx' ]
-       extendContext ctx'
-         $ inferify (instantiate sc xs)
+                     ++ " but found " ++ show (lps)
+       ctx' <- replicateM (length (names sc)) $ do
+                 i <- newName
+                 m <- newMetaVar
+                 return (i,Meta m)
+       let is = map fst ctx'
+       extendContext ctx' $ do
+         zipWithM_ checkifyPattern (instantiate psc (map Generated is)) patTys
+         inferify (instantiate sc (map (Var . Generated) is))
 
 
 inferifyClauses :: [Type] -> [Clause] -> TypeChecker Type
@@ -289,10 +294,12 @@ checkify m t
                    ++ "Instead found type: " ++ show t' ++ "\n"
                    ++ "Unification failed with error: " ++ e
 
-checkifyPattern :: Pattern -> Type -> TypeChecker Context
-checkifyPattern (VarPat _) t
-  = do i <- newName
-       return [(i,t)]
+checkifyPattern :: Pattern -> Type -> TypeChecker ()
+checkifyPattern (VarPat (Name _)) _
+  = return ()
+checkifyPattern (VarPat (Generated i)) t
+  = do t' <- typeInContext i
+       unify t t'
 checkifyPattern (ConPat c ps) t
   = do ConSig args ret <- typeInSignature c
        let lps = length ps
@@ -303,8 +310,7 @@ checkifyPattern (ConPat c ps) t
                    ++ " but was given " ++ show lps
        unify t ret
        subs <- substitution
-       rss <- zipWithM checkifyPattern ps (map (instantiateMetas subs) args)
-       return $ concat rss
+       zipWithM_ checkifyPattern ps (map (instantiateMetas subs) args)
 
 
 
