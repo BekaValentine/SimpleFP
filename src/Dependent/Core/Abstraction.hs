@@ -15,22 +15,21 @@ import Dependent.Core.Term
 
 
 
-instance Abstract String Term Pattern where
-  abstract (VarPat x) = return $ VarPat x
-  abstract (ConPat c ps) = ConPat c <$> abstract ps
-  abstract (AssertionPat m) = AssertionPat <$> abstract m
-
-instance Abstract String Term PatternSeq where
-  abstract PatternSeqNil
-    = return PatternSeqNil
-  abstract (PatternSeqCons p sc)
-    = PatternSeqCons <$> abstract p <*> abstractScope sc
-
 instance Abstract String Term Clause where
-  abstract (Clause ps sc)
-    = Clause <$> abstract ps <*> abstractScope sc
+  abstract (Clause psc sc)
+    = Clause <$> abstractScope psc <*> abstractScope sc
+
+instance Abstract String Variable Clause where
+  abstract (Clause psc sc)
+    = Clause <$> abstractScope psc <*> abstractScope sc
 
 instance Abstract String Term CaseMotive where
+  abstract (CaseMotiveNil a)
+    = CaseMotiveNil <$> abstract a
+  abstract (CaseMotiveCons a sc)
+    = CaseMotiveCons <$> abstract a <*> abstractScope sc
+
+instance Abstract String Variable CaseMotive where
   abstract (CaseMotiveNil a)
     = CaseMotiveNil <$> abstract a
   abstract (CaseMotiveCons a sc)
@@ -61,17 +60,60 @@ instance Abstract String Term Term where
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
 
+instance Abstract String Variable Term where
+  abstract (Meta i)
+    = return $ Meta i
+  abstract (Var (Name x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> Var (Name x)
+          Just y  -> Var y
+  abstract (Var (Generated i))
+    = return $ Var (Generated i)
+  abstract (Ann m ty)
+    = Ann <$> abstract m <*> return ty
+  abstract Type
+    = return Type
+  abstract (Fun a sc)
+    = Fun <$> abstract a <*> abstractScope sc
+  abstract (Lam sc)
+    = Lam <$> abstractScope sc
+  abstract (App f a)
+    = App <$> abstract f <*> abstract a
+  abstract (Con c as)
+    = Con c <$> mapM abstract as
+  abstract (Case as t cs)
+    = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
+
+instance Abstract String Term Pattern where
+  abstract (VarPat x)
+    = return $ VarPat x
+  abstract (ConPat c ps)
+    = ConPat c <$> mapM abstract ps
+  abstract (AssertionPat m)
+    = AssertionPat <$> abstract m
+
+instance Abstract String Variable Pattern where
+  abstract (VarPat (Name x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> VarPat (Name x)
+          Just y  -> VarPat y
+  abstract (VarPat (Generated i))
+    = return $ VarPat (Generated i)
+  abstract (ConPat c ps)
+    = ConPat c <$> mapM abstract ps
+  abstract (AssertionPat m)
+    = AssertionPat <$> abstract m
+
 funHelper :: String -> Term -> Term -> Term
 funHelper x a b = Fun a (scope [x] b)
 
 lamHelper :: String -> Term -> Term
 lamHelper x b = Lam (scope [x] b)
 
-patternSeqHelper :: Pattern -> [String] -> PatternSeq -> PatternSeq
-patternSeqHelper p xs ps = PatternSeqCons p (scope xs ps)
-
-clauseHelper :: PatternSeq -> [String] -> Term -> Clause
-clauseHelper ps xs b = Clause ps (scope xs b)
+clauseHelper :: [Pattern] -> [String] -> Term -> Clause
+clauseHelper ps xs b = Clause (scope xs ps) (scope xs b)
 
 consMotiveHelper :: String -> Term -> CaseMotive -> CaseMotive
 consMotiveHelper x a b = CaseMotiveCons a (scope [x] b)

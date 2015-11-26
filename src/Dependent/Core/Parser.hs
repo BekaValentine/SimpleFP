@@ -43,6 +43,7 @@ identifier = Token.identifier tokenParser
 reserved = Token.reserved tokenParser
 reservedOp = Token.reservedOp tokenParser
 parens = Token.parens tokenParser
+symbol = Token.symbol tokenParser
 
 
 
@@ -118,22 +119,15 @@ assertionPattern = do _ <- reservedOp "."
                       return $ (AssertionPat m, [])
 
 varPattern = do x <- varName
-                return (VarPat x,[x])
+                return (VarPat (Name x),[x])
 
 noArgConPattern = do c <- decName
-                     return $ (ConPat c PatternSeqNil, [])
+                     return $ (ConPat c [], [])
 
 conPattern = do c <- decName
                 psxs <- many conPatternArg
-                let (ps,xs) = patternSeqAndNames psxs
-                return $ (ConPat c ps, xs)
-  where
-    patternSeqAndNames :: [(Pattern,[String])] -> (PatternSeq,[String])
-    patternSeqAndNames []
-      = (PatternSeqNil, [])
-    patternSeqAndNames ((p,xs):psxs)
-      = let (ps,xs') = patternSeqAndNames psxs
-        in (patternSeqHelper p xs ps, xs++xs')
+                let (ps,xss) = unzip psxs
+                return $ (ConPat c ps, concat xss)
 
 parenPattern = parens pattern
 
@@ -144,9 +138,8 @@ assertionPatternArg = parenTerm <|> noArgConData <|> variable <|> typeType
 pattern = assertionPattern <|> parenPattern <|> conPattern <|> varPattern
 
 patternSeq = do psxs <- pattern `sepBy` reservedOp "||"
-                return $ ( foldr (\(p,xs) ps -> patternSeqHelper p xs ps) PatternSeqNil psxs
-                         , concat (map snd psxs)
-                         )
+                let (ps,xss) = unzip psxs
+                return (ps,concat xss)
 
 consMotive = do (xs,a) <- try $ parens $ do
                   xs <- many1 varName
@@ -208,14 +201,59 @@ parseTerm str = case parse (spaces *> term <* eof) "(unknown)" str of
 
 -- program parsers
 
-termDecl = do _ <- reserved "let"
-              x <- varName
-              _ <- reservedOp ":"
-              t <- term
-              _ <- reservedOp "="
-              m <- term
-              _ <- reserved "end"
-              return $ TermDeclaration x t m
+eqTermDecl = do (x,t) <- try $ do
+                  _ <- reserved "let"
+                  x <- varName
+                  _ <- reservedOp ":"
+                  t <- term
+                  _ <- reservedOp "="
+                  return (x,t)
+                m <- term
+                _ <- reserved "end"
+                return $ TermDeclaration x t m
+
+whereTermDecl = do (x,t) <- try $ do
+                     _ <- reserved "let"
+                     x <- varName
+                     _ <- reservedOp ":"
+                     t <- term
+                     _ <- reserved "where"
+                     return (x,t)
+                   _ <- optional (reservedOp "|")
+                   clauses@(Clause psc _:_) <- patternMatchClause x `sepBy1` reservedOp "|"
+                   _ <- reserved "end"
+                   let psLength = length (descope Name psc)
+                       mot = motiveAux psLength t
+                   unless (psLength <= functionArgsLength t)
+                     $ fail $ "Cannot build a case expression motive for fewer than " ++ show psLength
+                           ++ " args from the type " ++ show t
+                   return $ TermDeclaration x t (lambdaAux (\as -> Case as mot clauses) psLength)
+  where
+    lambdaAux :: ([Term] -> Term) -> Int -> Term
+    lambdaAux f 0 = f []
+    lambdaAux f n = Lam (Scope ["_" ++ show n] $ \[x] -> lambdaAux (f . (x:)) (n-1))
+    
+    functionArgsLength :: Term -> Int
+    functionArgsLength (Fun _ sc) = 1 + functionArgsLength (descope (Var . Name) sc)
+    functionArgsLength _          = 0
+    
+    motiveAux :: Int -> Term -> CaseMotive
+    motiveAux 0 t = CaseMotiveNil t
+    motiveAux n (Fun a (Scope ns b)) = CaseMotiveCons a (Scope ns (motiveAux (n-1) . b))
+
+patternMatchClause x = do _ <- symbol x
+                          (ps,xs) <- wherePatternSeq
+                          _ <- reservedOp "="
+                          b <- term
+                          return $ clauseHelper ps xs b
+
+wherePattern = assertionPattern <|> parenPattern <|> noArgConPattern <|> varPattern
+
+wherePatternSeq = do psxs <- many wherePattern
+                     let (ps,xss) = unzip psxs
+                     return (ps,concat xss)
+
+termDecl = eqTermDecl <|> whereTermDecl
 
 alternative = do c <- decName
                  as <- alternativeArgs

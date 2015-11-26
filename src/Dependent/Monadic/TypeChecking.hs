@@ -151,33 +151,25 @@ equalTerms (Case as motive cs) (Case as' motive' cs')
       = throwError $ "Motives not equal: " ++ show mot ++ " and " ++ show mot'
     
     equalClauses :: Clause -> Clause -> TypeChecker ()
-    equalClauses (Clause ps sc) (Clause ps' sc')
-      = do xs <- equalPatternSeq ps ps'
-           equalTerms (instantiate sc xs) (instantiate sc' xs)
+    equalClauses (Clause psc sc) (Clause psc' sc')
+      = do is <- replicateM (max (length (names sc)) (length (names sc'))) newName
+           let xs = map Generated is
+               xs' = map Var xs
+           zipWithM_ equalPattern (instantiate psc xs) (instantiate psc' xs)
+           equalTerms (instantiate sc xs') (instantiate sc' xs')
     
-    equalPattern :: Pattern -> Pattern -> TypeChecker [Term]
-    equalPattern (VarPat _) (VarPat _)
-      = do i <- newName
-           return [Var (Generated i)]
+    equalPattern :: Pattern -> Pattern -> TypeChecker ()
+    equalPattern (VarPat x) (VarPat x')
+      = unless (x == x')
+          $ throwError $ "Variable patterns not equal: " ++ show x ++ " and " ++ show x'
     equalPattern (ConPat c ps) (ConPat c' ps')
       = do unless (c == c')
              $ throwError $ "Mismatching constructors " ++ c ++ " and " ++ c'
-           equalPatternSeq ps ps'
+           zipWithM_ equalPattern ps ps'
     equalPattern (AssertionPat m) (AssertionPat m')
-      = do equalTerms m m'
-           return []
+      = equalTerms m m'
     equalPattern p p'
       = throwError $ "Patterns not equal: " ++ show p ++ " and " ++ show p'
-    
-    equalPatternSeq :: PatternSeq -> PatternSeq -> TypeChecker [Term]
-    equalPatternSeq PatternSeqNil PatternSeqNil
-      = return []
-    equalPatternSeq (PatternSeqCons p sc) (PatternSeqCons p' sc')
-      = do xs <- equalPattern p p'
-           xs' <- equalPatternSeq (instantiate sc xs) (instantiate sc' xs)
-           return $ xs ++ xs'
-    equalPatternSeq ps ps'
-      = throwError $ "Pattern sequences not equal: " ++ show ps ++ " and " ++ show ps'
 equalTerms m m'
   = throwError $ "Terms not equal: " ++ show m ++ " and " ++ show m'
 
@@ -295,57 +287,56 @@ checkCaseMotive (CaseMotiveCons arg sc)
        extendContext [(i,arg)]
          $ checkCaseMotive (instantiate sc [Var (Generated i)])
 
-checkPattern :: Pattern -> Term -> TypeChecker (Context,Term)
-checkPattern (VarPat _) t
-  = do i <- newName
-       return ([(i,t)], Var (Generated i))
-checkPattern (ConPat c ps) t
+checkPattern :: Pattern -> Term -> TypeChecker (Context,Term,[(Term,Term)])
+checkPattern (VarPat (Name x)) _
+  = return ([], Var (Name x), [])
+checkPattern (VarPat (Generated i)) t
+  = return ([(i,t)], Var (Generated i), [])
+checkPattern (ConPat c ps0) t
   = do consig <- typeInSignature c
-       (ctx,xs,ret) <- checkPatConArgs consig ps consig
+       (ctx,xs,ret,delayed) <- checkPatConArgs consig ps0 consig
        eret <- evaluate ret
        et <- evaluate t
        equalTerms eret et
-       return (ctx,Con c xs)
+       return (ctx,Con c xs,delayed)
   where
-    checkPatConArgs _ PatternSeqNil (ConSigNil ret)
-      = return ([], [], ret)
-    checkPatConArgs consig (PatternSeqCons p sc) (ConSigCons arg sc')
-      = do (ctx,x) <- checkPattern p arg
-           let is = [ Var (Generated i) | (i,_) <- ctx ]
-           (ctx',xs,ret) <-
+    checkPatConArgs _ [] (ConSigNil ret)
+      = return ([], [], ret, [])
+    checkPatConArgs consig (p:ps) (ConSigCons arg sc')
+      = do (ctx,x,delayed) <- checkPattern p arg
+           (ctx',xs,ret,delayed') <-
              extendContext ctx
-               $ checkPatConArgs consig (instantiate sc is) (instantiate sc' [x])
-           return (ctx++ctx',x:xs,ret)
+               $ checkPatConArgs consig ps (instantiate sc' [x])
+           return (ctx++ctx',x:xs,ret,delayed++delayed')
     checkPatConArgs consig _ _
-      = do let lps = patternSeqLength ps
+      = do let lps = length ps0
                lsig = conSigLength (Var . Name) consig
            throwError $ c ++ " expects " ++ show lsig ++ " case "
                    ++ (if lsig == 1 then "arg" else "args")
                    ++ " but was given " ++ show lps
 checkPattern (AssertionPat m) t
-  = do check m t
-       return ([], m)
+  = return ([], m, [(m,t)])
 
 checkClause :: Clause -> CaseMotive -> TypeChecker ()
-checkClause (Clause ps sc0) motive
-  = do (ctx,ret) <- checkPatternSeqMotive ps motive
-       let xs = [ Var (Generated i) | (i,_) <- ctx ]
+checkClause (Clause psc sc0) motive
+  = do is <- replicateM (length (names sc0)) newName
+       (ctx,ret,delayed) <- checkPatternSeqMotive (instantiate psc (map Generated is)) motive
+       forM_ delayed $ \(m,t) -> extendContext ctx (check m t)
        eret <- evaluate ret
        extendContext ctx
-         $ check (instantiate sc0 xs) eret
+         $ check (instantiate sc0 (map (Var . Generated) is)) eret
   where
-    checkPatternSeqMotive :: PatternSeq -> CaseMotive -> TypeChecker (Context,Term)
-    checkPatternSeqMotive PatternSeqNil (CaseMotiveNil ret)
-      = return ([],ret)
-    checkPatternSeqMotive (PatternSeqCons p sc) (CaseMotiveCons arg sc')
-      = do (ctx,x) <- checkPattern p arg
-           let is = [ Var (Generated i) | (i,_) <- ctx ]
-           (ctx',ret) <-
+    checkPatternSeqMotive :: [Pattern] -> CaseMotive -> TypeChecker (Context,Term,[(Term,Term)])
+    checkPatternSeqMotive [] (CaseMotiveNil ret)
+      = return ([],ret,[])
+    checkPatternSeqMotive (p:ps) (CaseMotiveCons arg sc')
+      = do (ctx,x,delayed) <- checkPattern p arg
+           (ctx',ret,delayed') <-
              extendContext ctx
-               $ checkPatternSeqMotive (instantiate sc is) (instantiate sc' [x])
-           return (ctx++ctx',ret)
+               $ checkPatternSeqMotive ps (instantiate sc' [x])
+           return (ctx++ctx',ret,delayed++delayed')
     checkPatternSeqMotive _ _
-      = do let lps = patternSeqLength ps
+      = do let lps = length (descope Name psc)
                lmot = caseMotiveLength motive
            throwError $ "Motive " ++ show motive ++ " expects " ++ show lmot ++ " case "
                    ++ (if lmot == 1 then "arg" else "args")

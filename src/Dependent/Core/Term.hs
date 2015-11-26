@@ -45,16 +45,12 @@ data CaseMotive
   | CaseMotiveCons Term (Scope Term CaseMotive)
 
 data Clause
-  = Clause PatternSeq (Scope Term Term)
+  = Clause (Scope Variable [Pattern]) (Scope Term Term)
 
 data Pattern
-  = VarPat String
-  | ConPat String PatternSeq
+  = VarPat Variable
+  | ConPat String [Pattern]
   | AssertionPat Term
-
-data PatternSeq
-  = PatternSeqNil
-  | PatternSeqCons Pattern (Scope Term PatternSeq)
 
 
 
@@ -65,12 +61,6 @@ caseMotiveLength :: CaseMotive -> Int
 caseMotiveLength (CaseMotiveNil _) = 0
 caseMotiveLength (CaseMotiveCons _ sc)
   = 1 + caseMotiveLength (descope (Var . Name) sc)
-
--- Pattern Sequence Length
-patternSeqLength :: PatternSeq -> Int
-patternSeqLength PatternSeqNil = 0
-patternSeqLength (PatternSeqCons _ sc)
-  = 1 + patternSeqLength (descope (Var . Name) sc)
 
 
 
@@ -92,33 +82,18 @@ instance ParenLoc Pattern where
 
 instance ParenRec Pattern where
   parenRec (VarPat x)
-    = x
+    = show x
+  parenRec (ConPat c [])
+    = c
   parenRec (ConPat c ps)
-    = case auxPatternSeq ps of
-        Nothing  -> c
-        Just ps' -> c ++ " " ++ unwords ps'
-    where
-      auxPatternSeq :: PatternSeq -> Maybe [String]
-      auxPatternSeq PatternSeqNil
-        = Nothing
-      auxPatternSeq (PatternSeqCons p sc)
-        = let p' = parenthesize Nothing p
-              mps' = auxPatternSeq (descope (Var . Name) sc)
-          in case mps' of
-               Nothing  -> Just [p']
-               Just ps' -> Just (p':ps')
+    = c ++ " " ++ unwords (map (parenthesize (Just ConPatArg)) ps)
   parenRec (AssertionPat m)
     = "." ++ parenthesize (Just AssertionPatArg) m
 
 instance Show Pattern where
   show p = parenthesize Nothing p
 
-instance Show PatternSeq where
-  show PatternSeqNil = ""
-  show (PatternSeqCons arg sc)
-    = case descope (Var . Name) sc of
-        PatternSeqNil -> show arg
-        ret           -> show arg ++ " || " ++ show ret
+
 
 data TermParenLoc
   = RootTerm
@@ -179,18 +154,10 @@ instance ParenRec Term where
    ++ " motive " ++ show mot
    ++ " of " ++ intercalate " | " (map auxClause cs) ++ " end"
     where
-      auxClause (Clause ps sc)
-        = intercalate " || " (auxPatternSeq ps)
+      auxClause (Clause psc sc)
+        = intercalate " || " (map show (descope Name psc))
           ++ " -> " ++ parenthesize Nothing
                          (descope (Var . Name) sc)
-      
-      auxPatternSeq :: PatternSeq -> [String]
-      auxPatternSeq PatternSeqNil
-        = []
-      auxPatternSeq (PatternSeqCons p sc)
-        = let p' = parenthesize Nothing p
-              ps' = auxPatternSeq (descope (Var . Name) sc)
-          in p':ps'
       
 
 

@@ -19,24 +19,24 @@ import Dependent.Core.Term
 matchPattern :: Pattern -> Term -> Maybe [Term]
 matchPattern (VarPat _) v = Just [v]
 matchPattern (ConPat c ps) (Con c' as) | c == c'
-  = matchPatternSeq ps as
+  = fmap concat $ zipWithM matchPattern ps as
 matchPattern (AssertionPat _) _ = Just []
 matchPattern _ _ = Nothing
 
-matchPatternSeq :: PatternSeq -> [Term] -> Maybe [Term]
-matchPatternSeq PatternSeqNil []
+matchPatterns :: [Pattern] -> [Term] -> Maybe [Term]
+matchPatterns [] []
   = Just []
-matchPatternSeq (PatternSeqCons p sc) (m:ms)
+matchPatterns (p:ps) (m:ms)
   = do vs <- matchPattern p m
-       vs' <- matchPatternSeq (descope (Var . Name) sc) ms
+       vs' <- matchPatterns ps ms
        return $ vs ++ vs'
-matchPatternSeq _ _
+matchPatterns _ _
   = Nothing
 
 matchClauses :: [Clause] -> [Term] -> Maybe Term
 matchClauses [] _ = Nothing
-matchClauses (Clause ps sc:cs) ms
-  = case matchPatternSeq ps ms of
+matchClauses (Clause psc sc:cs) ms
+  = case matchPatterns (descope Name psc) ms of
       Nothing -> matchClauses cs ms
       Just vs -> Just (instantiate sc vs)
 
