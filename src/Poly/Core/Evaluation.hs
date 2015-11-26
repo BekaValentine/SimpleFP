@@ -28,8 +28,8 @@ matchTerms ps zs = fmap concat (zipWithM match ps zs)
 matchClauses :: [Clause] -> [Term] -> Maybe Term
 matchClauses [] _
   = Nothing
-matchClauses (Clause ps sc:cs) vs
-  = case matchTerms ps vs of
+matchClauses (Clause psc sc:cs) vs
+  = case matchTerms (descope Name psc) vs of
       Nothing -> matchClauses cs vs
       Just xs -> Just (instantiate sc xs)
 

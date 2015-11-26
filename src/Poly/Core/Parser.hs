@@ -44,11 +44,22 @@ instance Abstract String Term Term where
   abstract (Case a cs)
     = Case <$> mapM abstract a <*> mapM abstractClause cs
 
+instance Abstract String Variable Pattern where
+  abstract (VarPat (Name x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> VarPat (Name x)
+          Just y  -> VarPat y
+  abstract (VarPat (Generated i))
+    = return $ VarPat (Generated i)
+  abstract (ConPat c ps)
+    = ConPat c <$> mapM abstract ps
+
 lamHelper :: String -> Term -> Term
 lamHelper x b = Lam (scope [x] b)
 
 clauseHelper :: [Pattern] -> [String] -> Term -> Clause
-clauseHelper ps xs b = Clause ps (scope xs b)
+clauseHelper ps xs b = Clause (scope xs ps) (scope xs b)
 
 instance Abstract String Type Type where
   abstract (Meta i)
@@ -183,7 +194,7 @@ conData = do c <- decName
              return $ Con c as
 
 varPattern = do x <- varName
-                return (VarPat x,[x])
+                return (VarPat (Name x),[x])
 
 noArgConPattern = do c <- decName
                      return $ (ConPat c [], [])
@@ -259,9 +270,9 @@ whereTermDecl = do (x,t) <- try $ do
                      _ <- reserved "where"
                      return (x,t)
                    _ <- optional (reservedOp "|")
-                   clauses@(Clause ps _:_) <- patternMatchClause x `sepBy1` reservedOp "|"
+                   clauses@(Clause psc _:_) <- patternMatchClause x `sepBy1` reservedOp "|"
                    _ <- reserved "end"
-                   return $ TermDeclaration x t (lambdaAux (\as -> Case as clauses) (length ps))
+                   return $ TermDeclaration x t (lambdaAux (\as -> Case as clauses) (length (descope Name psc)))
   where
     lambdaAux :: ([Term] -> Term) -> Int -> Term
     lambdaAux f 0 = f []
