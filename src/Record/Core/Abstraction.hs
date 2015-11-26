@@ -16,20 +16,12 @@ import Scope
 import Record.Core.ConSig
 import Record.Core.Term
 
-instance Abstract a b Term => Abstract a b Pattern where
-  abstract (VarPat x) = return $ VarPat x
-  abstract (ConPat c ps) = ConPat c <$> abstract ps
-  abstract (AssertionPat m) = AssertionPat <$> abstract m
+instance Abstract a b c => Abstract a b (Plicity,c) where
+  abstract (plic,x) = (,) plic <$> abstract x
 
-instance Abstract a b Term => Abstract a b PatternSeq where
-  abstract PatternSeqNil
-    = return PatternSeqNil
-  abstract (PatternSeqCons plic p sc)
-    = PatternSeqCons plic <$> abstract p <*> abstractScope sc
-
-instance Abstract a b Term => Abstract a b Clause where
-  abstract (Clause ps sc)
-    = Clause <$> abstract ps <*> abstractScope sc
+instance (Abstract a b Pattern, Abstract a b Term) => Abstract a b Clause where
+  abstract (Clause psc sc)
+    = Clause <$> abstractScope psc <*> abstractScope sc
 
 instance Abstract a b Term => Abstract a b CaseMotive where
   abstract (CaseMotiveNil a)
@@ -113,17 +105,126 @@ instance Abstract Int Term Term where
   abstract (RecordDot m x)
     = RecordDot <$> abstract m <*> pure x
 
+instance Abstract String Variable Term where
+  abstract (Meta i)
+    = return $ Meta i
+  abstract (Var (Name x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> Var (Name x)
+          Just y  -> Var y
+  abstract (Var (Generated i))
+    = return $ Var (Generated i)
+  abstract (DottedVar m var)
+    = return $ DottedVar m var
+  abstract (Ann m ty)
+    = Ann <$> abstract m <*> return ty
+  abstract Type
+    = return Type
+  abstract (Fun plic a sc)
+    = Fun plic <$> abstract a <*> abstractScope sc
+  abstract (Lam plic sc)
+    = Lam plic <$> abstractScope sc
+  abstract (App plic f a)
+    = App plic <$> abstract f <*> abstract a
+  abstract (Con c as)
+    = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
+  abstract (Case as t cs)
+    = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
+  abstract (OpenIn settings m)
+    = OpenIn settings <$> abstract m
+  abstract (RecordType tele)
+    = RecordType <$> abstract tele
+  abstract (RecordCon fields)
+    = RecordCon <$> (sequenceA [ (,) x <$> abstract m | (x,m) <- fields ])
+  abstract (RecordDot m x)
+    = RecordDot <$> abstract m <*> pure x
+
+instance Abstract Int Variable Term where
+  abstract (Meta i)
+    = return $ Meta i
+  abstract (Var (Name x))
+    = return $ Var (Name x)
+  abstract (Var (Generated i))
+    = reader $ \e ->
+        case lookup i e of
+          Nothing -> Var (Generated i)
+          Just y  -> Var y
+  abstract (DottedVar m var)
+    = return $ DottedVar m var
+  abstract (Ann m ty)
+    = Ann <$> abstract m <*> return ty
+  abstract Type
+    = return Type
+  abstract (Fun plic a sc)
+    = Fun plic <$> abstract a <*> abstractScope sc
+  abstract (Lam plic sc)
+    = Lam plic <$> abstractScope sc
+  abstract (App plic f a)
+    = App plic <$> abstract f <*> abstract a
+  abstract (Con c as)
+    = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
+  abstract (Case as t cs)
+    = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
+  abstract (OpenIn settings m)
+    = OpenIn settings <$> abstract m
+  abstract (RecordType tele)
+    = RecordType <$> abstract tele
+  abstract (RecordCon fields)
+    = RecordCon <$> (sequenceA [ (,) x <$> abstract m | (x,m) <- fields ])
+  abstract (RecordDot m x)
+    = RecordDot <$> abstract m <*> pure x
+
+instance Abstract String Term Pattern where
+  abstract (VarPat x)
+    = return $ VarPat x
+  abstract (ConPat c ps)
+    = ConPat c <$> mapM abstract ps
+  abstract (AssertionPat m)
+    = AssertionPat <$> abstract m
+
+instance Abstract Int Term Pattern where
+  abstract (VarPat x)
+    = return $ VarPat x
+  abstract (ConPat c ps)
+    = ConPat c <$> mapM abstract ps
+  abstract (AssertionPat m)
+    = AssertionPat <$> abstract m
+
+instance Abstract String Variable Pattern where
+  abstract (VarPat (Name x))
+    = reader $ \e ->
+        case lookup x e of
+          Nothing -> VarPat (Name x)
+          Just y  -> VarPat y
+  abstract (VarPat (Generated i))
+    = return $ VarPat (Generated i)
+  abstract (ConPat c ps)
+    = ConPat c <$> mapM abstract ps
+  abstract (AssertionPat m)
+    = AssertionPat <$> abstract m
+
+instance Abstract Int Variable Pattern where
+  abstract (VarPat (Name x))
+    = return $ VarPat (Name x)
+  abstract (VarPat (Generated i))
+    = reader $ \e ->
+        case lookup i e of
+          Nothing -> VarPat (Generated i)
+          Just y  -> VarPat y
+  abstract (ConPat c ps)
+    = ConPat c <$> mapM abstract ps
+  abstract (AssertionPat m)
+    = AssertionPat <$> abstract m
+
 funHelper :: Plicity -> String -> Term -> Term -> Term
 funHelper plic x a b = Fun plic a (scope [x] b)
 
 lamHelper :: Plicity -> String -> Term -> Term
 lamHelper plic x b = Lam plic (scope [x] b)
 
-patternSeqHelper :: Plicity -> Pattern -> [String] -> PatternSeq -> PatternSeq
-patternSeqHelper plic p xs ps = PatternSeqCons plic p (scope xs ps)
-
-clauseHelper :: PatternSeq -> [String] -> Term -> Clause
-clauseHelper ps xs b = Clause ps (scope xs b)
+clauseHelper :: [Pattern] -> [String] -> Term -> Clause
+clauseHelper ps xs b = Clause (scope xs ps) (scope xs b)
 
 consMotiveHelper :: String -> Term -> CaseMotive -> CaseMotive
 consMotiveHelper x a b = CaseMotiveCons a (scope [x] b)
