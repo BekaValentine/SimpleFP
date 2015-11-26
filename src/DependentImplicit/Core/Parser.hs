@@ -45,6 +45,7 @@ reserved = Token.reserved tokenParser
 reservedOp = Token.reservedOp tokenParser
 parens = Token.parens tokenParser
 braces = Token.braces tokenParser
+symbol = Token.symbol tokenParser
 
 
 
@@ -142,34 +143,27 @@ assertionPattern = do _ <- reservedOp "."
                       return $ (AssertionPat m, [])
 
 varPattern = do x <- varName
-                return (VarPat x,[x])
+                return (VarPat (Name x),[x])
 
 noArgConPattern = do c <- decName
-                     return $ (ConPat c PatternSeqNil, [])
+                     return $ (ConPat c [], [])
 
 conPattern = do c <- decName
                 psxs <- many conPatternArg
-                let (ps,xs) = patternSeqAndNames psxs
-                return $ (ConPat c ps, xs)
-  where
-    patternSeqAndNames :: [(Plicity,(Pattern,[String]))] -> (PatternSeq,[String])
-    patternSeqAndNames []
-      = (PatternSeqNil, [])
-    patternSeqAndNames ((plic,(p,xs)):psxs)
-      = let (ps,xs') = patternSeqAndNames psxs
-        in (patternSeqHelper plic p xs ps, xs++xs')
+                let (ps,xss) = unzip psxs
+                return $ (ConPat c ps, concat xss)
 
 parenPattern = parens pattern
 
 rawExplConPatternArg = assertionPattern <|> parenPattern <|> noArgConPattern <|> varPattern
 
-explConPatternArg = do p <- rawExplConPatternArg
-                       return (Expl,p)
+explConPatternArg = do (p,xs) <- rawExplConPatternArg
+                       return ((Expl,p),xs)
 
 rawImplConPatternArg = assertionPattern <|> parenPattern <|> conPattern <|> varPattern
 
-implConPatternArg = do p <- braces $ rawImplConPatternArg
-                       return (Impl,p)
+implConPatternArg = do (p,xs) <- braces $ rawImplConPatternArg
+                       return ((Impl,p),xs)
 
 conPatternArg = explConPatternArg <|> implConPatternArg
 
@@ -177,10 +171,9 @@ assertionPatternArg = parenTerm <|> noArgConData <|> variable <|> typeType
 
 pattern = assertionPattern <|> parenPattern <|> conPattern <|> varPattern
 
-patternSeq = do psxs <- many pattern
-                return $ ( foldr (\(p,xs) ps -> patternSeqHelper Expl p xs ps) PatternSeqNil psxs
-                         , concat (map snd psxs)
-                         )
+patternSeq = do psxs <- pattern `sepBy` reservedOp "||"
+                let (ps,xss) = unzip psxs
+                return (ps,concat xss)
 
 consMotive = do (xs,a) <- try $ parens $ do
                   xs <- many1 varName
@@ -262,14 +255,73 @@ parseTerm str = case parse (spaces *> term <* eof) "(unknown)" str of
 
 -- program parsers
 
-termDecl = do _ <- reserved "let"
-              x <- varName
-              _ <- reservedOp ":"
-              t <- term
-              _ <- reservedOp "="
-              m <- term
-              _ <- reserved "end"
-              return $ TermDeclaration x t m
+eqTermDecl = do (x,t) <- try $ do
+                  _ <- reserved "let"
+                  x <- varName
+                  _ <- reservedOp ":"
+                  t <- term
+                  _ <- reservedOp "="
+                  return (x,t)
+                m <- term
+                _ <- reserved "end"
+                return $ TermDeclaration x t m
+
+whereTermDecl = do (x,t) <- try $ do
+                     _ <- reserved "let"
+                     x <- varName
+                     _ <- reservedOp ":"
+                     t <- term
+                     _ <- reserved "where"
+                     return (x,t)
+                   _ <- optional (reservedOp "|")
+                   plicsClauses@((_,Clause ps _):_) <- patternMatchClause x `sepBy1` reservedOp "|"
+                   _ <- reserved "end"
+                   let (plics:plicss) = map fst plicsClauses
+                       clauses = map snd plicsClauses
+                   unless (enoughFunctionArgs plics t)
+                     $ fail $ "Cannot build a case expression motive from the type " ++ show t
+                   unless (all (plics==) plicss)
+                     $ fail $ "Mismatching plicities in different clauses of a pattern matching function"
+                   let mot = motiveAux (length plics) t
+                   return $ TermDeclaration x t (lambdaAux (\as -> Case as mot clauses) plics)
+  where
+    lambdaAux :: ([Term] -> Term) -> [Plicity] -> Term
+    lambdaAux f [] = f []
+    lambdaAux f (plic:plics) = Lam plic (Scope ["_" ++ show (length plics)] $ \[x] -> lambdaAux (f . (x:)) plics)
+    
+    enoughFunctionArgs :: [Plicity] -> Term -> Bool
+    enoughFunctionArgs [] t = True
+    enoughFunctionArgs (Expl:plics) (Fun Expl _ sc) = enoughFunctionArgs plics (descope (Var . Name) sc)
+    enoughFunctionArgs (Impl:plics) (Fun Impl _ sc) = enoughFunctionArgs plics (descope (Var . Name) sc)
+    enoughFunctionArgs _ _ = False
+    
+    motiveAux :: Int -> Term -> CaseMotive
+    motiveAux 0 t = CaseMotiveNil t
+    motiveAux n (Fun _ a (Scope ns b)) = CaseMotiveCons a (Scope ns (motiveAux (n-1) . b))
+
+patternMatchClause x = do _ <- symbol x
+                          (ps,xs) <- wherePatternSeq
+                          _ <- reservedOp "="
+                          b <- term
+                          return $ (map fst ps, clauseHelper (map snd ps) xs b)
+
+rawExplWherePattern = assertionPattern <|> parenPattern <|> noArgConPattern <|> varPattern
+
+explWherePattern = do (p,xs) <- rawExplWherePattern
+                      return ((Expl,p),xs)
+
+rawImplWherePattern = assertionPattern <|> parenPattern <|> conPattern <|> varPattern
+
+implWherePattern = do (p,xs) <- braces $ rawImplWherePattern
+                      return ((Impl,p),xs)
+
+wherePattern = implWherePattern <|> explWherePattern
+
+wherePatternSeq = do psxs <- many wherePattern
+                     let (ps,xss) = unzip psxs
+                     return (ps,concat xss)
+
+termDecl = eqTermDecl <|> whereTermDecl
 
 alternative = do c <- decName
                  as <- alternativeArgs

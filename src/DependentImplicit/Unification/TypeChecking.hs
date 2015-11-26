@@ -99,14 +99,11 @@ occurs x (Case as mot cs) = any (occurs x) as || occursCaseMotive mot || any occ
     occursCaseMotive (CaseMotiveCons a sc)
       = occurs x a || occursCaseMotive (descope (Var . Name) sc)
     
-    occursClause (Clause ps sc) = occursPatternSeq ps || occurs x (descope (Var . Name) sc)
+    occursClause (Clause psc sc) = any occursPattern (descope Name psc) || occurs x (descope (Var . Name) sc)
     
     occursPattern (VarPat _) = False
-    occursPattern (ConPat _ xs) = occursPatternSeq xs
+    occursPattern (ConPat _ xs) = any (occursPattern . snd) xs
     occursPattern (AssertionPat m) = occurs x m
-    
-    occursPatternSeq PatternSeqNil = False
-    occursPatternSeq (PatternSeqCons _ p sc) = occursPattern p || occursPatternSeq (descope (Var . Name) sc)
 
 solve :: [Equation] -> TypeChecker Substitution
 solve eqs0 = go eqs0 []
@@ -212,31 +209,37 @@ solve eqs0 = go eqs0 []
     
     goClauses :: [Clause] -> [Clause] -> TypeChecker [Equation]
     goClauses [] [] = return []
-    goClauses (Clause ps1 sc1:cs1) (Clause ps2 sc2:cs2)
-      = do xs <- goPatternSeq ps1 ps2
-           reqs <- goClauses cs1 cs2
-           return (Equation (instantiate sc1 xs) (instantiate sc2 xs) : reqs)
+    goClauses (Clause psc1 sc1:cs1) (Clause psc2 sc2:cs2)
+      = do is <- replicateM (max (length (names sc1)) (length (names sc2))) newName
+           let xs = map Generated is
+               xs' = map Var xs
+           reqss <- zipWithM goPattern (instantiate psc1 xs) (instantiate psc2 xs)
+           reqs' <- goClauses cs1 cs2
+           return (Equation (instantiate sc1 xs') (instantiate sc2 xs') : concat reqss ++ reqs')
     goClauses _ _ = throwError $ "Mismatching number of clauses."
     
-    goPattern :: Pattern -> Pattern -> TypeChecker [Term]
-    goPattern (VarPat _) (VarPat _)
-      = do i <- newName
-           return [Var (Generated i)]
+    goPattern :: Pattern -> Pattern -> TypeChecker [Equation]
+    goPattern (VarPat x) (VarPat x')
+      = do unless (x == x')
+             $ throwError $ "Variable patters not equal: " ++ show x ++ " and " ++ show x'
+           return []
     goPattern (ConPat c ps) (ConPat c' ps')
-      | c == c'   = goPatternSeq ps ps'
+      | c == c'   = goPatterns ps ps'
       | otherwise = throwError $ "Mismatching constructors " ++ c ++ " and " ++ c'
+    goPattern (AssertionPat m) (AssertionPat m')
+      = return [Equation m m']
     goPattern _ _ = throwError "Patterns not equal."
     
-    goPatternSeq :: PatternSeq -> PatternSeq -> TypeChecker [Term]
-    goPatternSeq PatternSeqNil PatternSeqNil
+    goPatterns :: [(Plicity,Pattern)] -> [(Plicity,Pattern)] -> TypeChecker [Equation]
+    goPatterns [] []
       = return []
-    goPatternSeq (PatternSeqCons plic p sc) (PatternSeqCons plic' p' sc')
-      = do unless (plic == plic')
+    goPatterns ((plic1,p1):ps1) ((plic2,p2):ps2)
+      = do unless (plic1 == plic2)
              $ throwError "Mismatched plicities when trying to unify constructor sequences."
-           xs <- goPattern p p'
-           xs' <- goPatternSeq (instantiate sc xs) (instantiate sc' xs)
-           return $ xs ++ xs'
-    goPatternSeq _ _
+           eqs <- goPattern p1 p2
+           eqs' <- goPatterns ps1 ps2
+           return $ eqs ++ eqs'
+    goPatterns _ _
       = throwError "Patterns not equal."
 
 
@@ -308,16 +311,7 @@ instantiateMetasPat :: Substitution -> Pattern -> Pattern
 instantiateMetasPat _ (VarPat x)
   = VarPat x
 instantiateMetasPat subs (ConPat c ps)
-  = ConPat c (instantiateMetasPatSeq ps)
-  where
-    instantiateMetasPatSeq :: PatternSeq -> PatternSeq
-    instantiateMetasPatSeq PatternSeqNil
-      = PatternSeqNil
-    instantiateMetasPatSeq (PatternSeqCons plic p sc)
-      = PatternSeqCons
-          plic
-          (instantiateMetasPat subs p)
-          (instantiateMetasPatSeq <$> sc)
+  = ConPat c (map (\(plic,p) -> (plic,instantiateMetasPat subs p)) ps)
 instantiateMetasPat subs (AssertionPat m)
   = AssertionPat (instantiateMetas subs m)
 
@@ -581,106 +575,101 @@ checkifyCaseMotive (CaseMotiveCons a sc)
        subs <- substitution
        return (instantiateMetasCaseMotive subs (CaseMotiveCons a' (Scope (names sc) (abstractOver [i] b'))))
 
-checkifyPattern :: Pattern -> Term -> TypeChecker (Pattern,Context,Term)
-checkifyPattern (VarPat x) t
-  = do i <- newName
-       return (VarPat x, [(i,t)], Var (Generated i))
+checkifyPattern :: Pattern -> Term -> TypeChecker (Pattern,Term)
+checkifyPattern (VarPat (Name x)) _
+  = return (VarPat (Name x), Var (Name x))
+checkifyPattern (VarPat (Generated i)) t
+  = do t' <- typeInContext i
+       unify t t'
+       return (VarPat (Generated i), Var (Generated i))
 checkifyPattern (ConPat c ps0) t
   = do sig <- typeInSignature c
-       (ps',ctx,xs,ret) <- checkifyPatConArgs sig ps0 sig
-       et <- evaluate t
-       eret <- evaluate ret
-       unify et eret
+       (ps',xs,ret) <- checkifyPatConArgs sig ps0 sig
        subs <- substitution
-       return ( instantiateMetasPat subs (ConPat c ps')
-              , map (\(x,t) -> (x, instantiateMetas subs t)) ctx
-              , instantiateMetas subs (Con c xs)
+       et <- evaluate (instantiateMetas subs t)
+       eret <- evaluate (instantiateMetas subs ret)
+       unify et eret
+       subs' <- substitution
+       return ( instantiateMetasPat subs' (ConPat c ps')
+              , instantiateMetas subs' (Con c xs)
               )
   where
-    checkifyPatConArgs :: ConSig Term -> PatternSeq -> ConSig Term -> TypeChecker (PatternSeq,Context,[(Plicity,Term)],Term)
-    checkifyPatConArgs _ PatternSeqNil (ConSigNil ret)
-      = return (PatternSeqNil,[],[],ret)
-    checkifyPatConArgs consig (PatternSeqCons Expl p sc) (ConSigCons Expl arg sc')
+    checkifyPatConArgs :: ConSig Term -> [(Plicity,Pattern)] -> ConSig Term -> TypeChecker ([(Plicity,Pattern)],[(Plicity,Term)],Term)
+    checkifyPatConArgs _ [] (ConSigNil ret)
+      = return ([],[],ret)
+    checkifyPatConArgs consig ((Expl,p):ps) (ConSigCons Expl arg sc')
       = do earg <- evaluate arg
-           (p',ctx,x) <- checkifyPattern p earg
-           let rawIs = map fst ctx
-               is = map (Var . Generated) rawIs
-           (ps',ctx',xs,ret) <-
-             extendContext ctx
-               $ checkifyPatConArgs consig (instantiate sc is) (instantiate sc' [x])
-           return ( PatternSeqCons Expl p' (Scope (names sc) (abstractOver rawIs ps'))
-                  , ctx++ctx'
+           (p',x) <- checkifyPattern p earg
+           (ps',xs,ret) <-
+             checkifyPatConArgs consig ps (instantiate sc' [x])
+           return ( (Expl,p'):ps'
                   , (Expl,x):xs
                   , ret
                   )
-    checkifyPatConArgs consig (PatternSeqCons Impl p sc) (ConSigCons Impl arg sc')
+    checkifyPatConArgs consig ((Impl,p):ps) (ConSigCons Impl arg sc')
       = do earg <- evaluate arg
-           (p',ctx,x) <- checkifyPattern p earg
-           let rawIs = map fst ctx
-               is = map (Var . Generated) rawIs
-           (ps',ctx',xs,ret) <-
-             extendContext ctx
-               $ checkifyPatConArgs consig (instantiate sc is) (instantiate sc' [x])
-           return ( PatternSeqCons Impl p' (Scope (names sc) (abstractOver rawIs ps'))
-                  , ctx++ctx'
+           (p',x) <- checkifyPattern p earg
+           (ps',xs,ret) <-
+             checkifyPatConArgs consig ps (instantiate sc' [x])
+           return ( (Impl,p'):ps'
                   , (Impl,x):xs
                   , ret
                   )
     checkifyPatConArgs consig ps (ConSigCons Impl _ sc')
       = do meta <- newMetaVar
            let x = Meta meta
-           (ps',ctx',xs,ret) <- checkifyPatConArgs
-                                  consig
-                                  ps
-                                  (instantiate sc' [x])
-           return ( PatternSeqCons Impl (AssertionPat x) (Scope (names sc') $ \_ -> ps')
-                  , ctx'
+           (ps',xs,ret) <- checkifyPatConArgs
+                             consig
+                             ps
+                             (instantiate sc' [x])
+           return ( (Impl,AssertionPat x):ps'
                   , (Impl,x):xs
                   , ret
                   )
-    checkifyPatConArgs consig (PatternSeqCons Impl _ _) (ConSigCons Expl _ _)
+    checkifyPatConArgs consig ((Impl,_):_) (ConSigCons Expl _ _)
       = throwError $ "Expected an explicit argument but found an implicit argument "
                   ++ "when checking " ++ show (ConPat c ps0)
                   ++ " matches the signature " ++ showConSig (Var . Name) consig
     checkifyPatConArgs consig _ _
-      = do let lps = patternSeqLength ps0
+      = do let lps = length ps0
                lsig = conSigLength (Var . Name) consig
            throwError $ c ++ " expects " ++ show lsig ++ " case "
                    ++ (if lsig == 1 then "arg" else "args")
                    ++ " but was given " ++ show lps
 checkifyPattern (AssertionPat m) t
-  = do et <- evaluate t
-       m' <- checkify m et
-       return (AssertionPat m', [], m')
+  = do m' <- checkify m t
+       subs <- substitution
+       let m'' = instantiateMetas subs m'
+       return (AssertionPat m'', m'')
 
 
 checkifyClause :: Clause -> CaseMotive -> TypeChecker Clause
-checkifyClause (Clause ps sc0) motive
-  = do (ps',ctx,ret) <- checkPatternSeqMotive ps motive
+checkifyClause (Clause psc sc0) motive
+  = do ctx <- replicateM (length (names sc0)) $ do
+                i <- newName
+                m <- newMetaVar
+                return (i, Meta m)
        let is = map fst ctx
-           xs = map (Var . Generated) is
-       eret <- evaluate ret
-       m' <- extendContext ctx
-               $ checkify (instantiate sc0 xs) eret
-       return $ Clause ps' (Scope (names sc0) (abstractOver is m'))
+       extendContext ctx $ do
+         (ps',ret) <- checkPatternsMotive (instantiate psc (map Generated is)) motive
+         eret <- evaluate ret
+         m' <- checkify (instantiate sc0 (map (Var . Generated) is)) eret
+         return $ Clause (Scope (names psc) (abstractOver is ps'))
+                         (Scope (names sc0) (abstractOver is m'))
   where
-    checkPatternSeqMotive :: PatternSeq -> CaseMotive -> TypeChecker (PatternSeq,Context,Term)
-    checkPatternSeqMotive PatternSeqNil (CaseMotiveNil ret)
-      = return (PatternSeqNil,[],ret)
-    checkPatternSeqMotive (PatternSeqCons plic p sc) (CaseMotiveCons arg sc')
+    checkPatternsMotive :: [Pattern] -> CaseMotive -> TypeChecker ([Pattern],Term)
+    checkPatternsMotive [] (CaseMotiveNil ret)
+      = return ([],ret)
+    checkPatternsMotive (p:ps) (CaseMotiveCons arg sc')
       = do earg <- evaluate arg
-           (p',ctx,x) <- checkifyPattern p earg
-           let is = map fst ctx
-               xs = map (Var . Generated) is
-           (ps',ctx',ret) <-
-             extendContext ctx
-               $ checkPatternSeqMotive (instantiate sc xs) (instantiate sc' [x])
-           return ( PatternSeqCons plic p' (Scope (names sc) (abstractOver is ps'))
-                  , ctx++ctx'
+           (p',x) <- checkifyPattern p earg
+           (ps',ret) <-
+             checkPatternsMotive ps (instantiate sc' [x])
+           return ( p':ps'
                   , ret
                   )
-    checkPatternSeqMotive _ _
-      = do let lps = patternSeqLength ps
+    checkPatternsMotive _ _
+      = do let lps = length (descope Name psc)
                lmot = caseMotiveLength motive
            throwError $ "Motive " ++ show motive ++ " expects " ++ show lmot ++ " case "
                    ++ (if lmot == 1 then "arg" else "args")

@@ -62,6 +62,7 @@ let vapp : {a : Type} -> {b : Type} -> {n : Nat} -> (fs : Vec ((x : a) -> b) n) 
     end
 end
 
+
 let vec : {a : Type} -> {n : Nat} -> (x : a) -> Vec a n
   = \{a} -> \{n} -> \x ->
     case n

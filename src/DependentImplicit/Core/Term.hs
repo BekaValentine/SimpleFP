@@ -50,16 +50,12 @@ data CaseMotive
   | CaseMotiveCons Term (Scope Term CaseMotive)
 
 data Clause
-  = Clause PatternSeq (Scope Term Term)
+  = Clause (Scope Variable [Pattern]) (Scope Term Term)
 
 data Pattern
-  = VarPat String
-  | ConPat String PatternSeq
+  = VarPat Variable
+  | ConPat String [(Plicity,Pattern)]
   | AssertionPat Term
-
-data PatternSeq
-  = PatternSeqNil
-  | PatternSeqCons Plicity Pattern (Scope Term PatternSeq)
 
 
 
@@ -70,12 +66,6 @@ caseMotiveLength :: CaseMotive -> Int
 caseMotiveLength (CaseMotiveNil _) = 0
 caseMotiveLength (CaseMotiveCons _ sc)
   = 1 + caseMotiveLength (descope (Var . Name) sc)
-
--- Pattern Sequence Length
-patternSeqLength :: PatternSeq -> Int
-patternSeqLength PatternSeqNil = 0
-patternSeqLength (PatternSeqCons _ _ sc)
-  = 1 + patternSeqLength (descope (Var . Name) sc)
 
 
 
@@ -97,40 +87,22 @@ instance ParenLoc Pattern where
 
 instance ParenRec Pattern where
   parenRec (VarPat x)
-    = x
+    = show x
+  parenRec (ConPat c [])
+    = c
   parenRec (ConPat c ps)
-    = case auxPatternSeq ps of
-        Nothing  -> c
-        Just ps' -> c ++ " " ++ unwords ps'
+    = c ++ " " ++ unwords (map auxConPatArg ps)
     where
-      auxPatternSeq :: PatternSeq -> Maybe [String]
-      auxPatternSeq PatternSeqNil
-        = Nothing
-      auxPatternSeq (PatternSeqCons plic p sc)
-        = let p0' = parenthesize Nothing p
-              p' = case plic of
-                     Expl -> p0'
-                     Impl -> "{" ++ p0' ++ "}"
-              mps' = auxPatternSeq (descope (Var . Name) sc)
-          in case mps' of
-               Nothing  -> Just [p']
-               Just ps' -> Just (p':ps')
+      auxConPatArg :: (Plicity,Pattern) -> String
+      auxConPatArg (Expl,p) = parenthesize (Just ExplConPatArg) p
+      auxConPatArg (Impl,p) = "{" ++ parenthesize (Just ImplConPatArg) p ++ "}"
   parenRec (AssertionPat m)
     = "." ++ parenthesize (Just AssertionPatArg) m
 
 instance Show Pattern where
   show p = parenthesize Nothing p
 
-instance Show PatternSeq where
-  show PatternSeqNil = ""
-  show (PatternSeqCons plic arg sc)
-    = let arg0' = show arg
-          arg' = case plic of
-                   Expl -> arg0'
-                   Impl -> "{" ++ arg0' ++ "}"
-      in case descope (Var . Name) sc of
-           PatternSeqNil -> arg'
-           ret           -> arg' ++ " || " ++ show ret
+
 
 data TermParenLoc
   = RootTerm
@@ -207,18 +179,11 @@ instance ParenRec Term where
    ++ " motive " ++ show mot
    ++ " of " ++ intercalate " | " (map auxClause cs) ++ " end"
     where
-      auxClause (Clause ps sc)
-        = intercalate " || " (auxPatternSeq ps)
+      auxClause (Clause psc sc)
+        = intercalate " || " (map show (descope Name psc))
           ++ " -> " ++ parenthesize Nothing
                          (descope (Var . Name) sc)
-      
-      auxPatternSeq :: PatternSeq -> [String]
-      auxPatternSeq PatternSeqNil
-        = []
-      auxPatternSeq (PatternSeqCons _ p sc)
-        = let p' = parenthesize Nothing p
-              ps' = auxPatternSeq (descope (Var . Name) sc)
-          in p':ps'
+
       
 
 

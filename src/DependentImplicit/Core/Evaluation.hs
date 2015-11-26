@@ -29,27 +29,27 @@ import DependentImplicit.Core.Term
 matchPattern :: Pattern -> Term -> Maybe [Term]
 matchPattern (VarPat _) v = Just [v]
 matchPattern (ConPat c ps) (Con c' as) | c == c'
-  = matchPatternSeq ps as
+  = matchPatterns ps as
 matchPattern (AssertionPat _) _ = Just []
 matchPattern _ _ = Nothing
 
-matchPatternSeq :: PatternSeq -> [(Plicity,Term)] -> Maybe [Term]
-matchPatternSeq PatternSeqNil []
+matchPatterns :: [(Plicity,Pattern)] -> [(Plicity,Term)] -> Maybe [Term]
+matchPatterns [] []
   = Just []
-matchPatternSeq (PatternSeqCons plic p sc) ((plic',m):ms)
+matchPatterns ((plic,p):ps) ((plic',m):ms)
   | plic == plic'
     = do vs <- matchPattern p m
-         vs' <- matchPatternSeq (descope (Var . Name) sc) ms
+         vs' <- matchPatterns ps ms
          return $ vs ++ vs'
   | otherwise
     = error "Mismatching plicity in pattern match."
-matchPatternSeq _ _
+matchPatterns _ _
   = Nothing
 
 matchClauses :: [Clause] -> [(Plicity,Term)] -> Maybe Term
 matchClauses [] _ = Nothing
-matchClauses (Clause ps sc:cs) ms
-  = case matchPatternSeq ps ms of
+matchClauses (Clause psc sc:cs) ms
+  = case matchPatterns [ (Expl,p) | p <- descope Name psc ] ms of
       Nothing -> matchClauses cs ms
       Just vs -> Just (instantiate sc vs)
 
