@@ -103,8 +103,8 @@ instance Abstract String Type Type where
         case lookup x e of
           Nothing -> TyVar (TyName x)
           Just m  -> m
-  abstract (TyVar (TyGenerated i))
-    = return $ TyVar (TyGenerated i)
+  abstract (TyVar (TyGenerated x i))
+    = return $ TyVar (TyGenerated x i)
   abstract (TyCon c as)
     = TyCon c <$> mapM abstract as
   abstract (Fun a b)

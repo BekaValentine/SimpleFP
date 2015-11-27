@@ -17,8 +17,12 @@ import Scope
 
 data TyVariable
   = TyName String
-  | TyGenerated Int
-  deriving (Eq)
+  | TyGenerated String Int
+
+instance Eq TyVariable where
+  TyName x == TyName y = x == y
+  TyGenerated _ i == TyGenerated _ j = i == j
+  _ == _ = False
 
 data Type
   = Meta Int
@@ -33,7 +37,7 @@ data Type
 
 instance Show TyVariable where
   show (TyName x)      = x
-  show (TyGenerated i) = "_" ++ show i
+  show (TyGenerated x _) = x
 
 data TypeParenLoc = TyConArg | FunLeft | FunRight | ForallBody
   deriving (Eq)

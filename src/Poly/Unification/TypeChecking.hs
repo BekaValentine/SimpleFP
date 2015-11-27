@@ -23,7 +23,7 @@ data ConSig = ConSig Int (Scope Type ([Type],Type))
 
 instance Show ConSig where
   show (ConSig n sc)
-    = let (as,r) = instantiate sc [ TyVar (TyGenerated i) | i <- [0..n] ]
+    = let (as,r) = instantiate sc (zipWith (\x i -> TyVar (TyGenerated x i)) (names sc) [0..n])
       in "(" ++ intercalate "," (map show as) ++ ")" ++ show r
 
 data TyConSig = TyConSig Int
@@ -173,8 +173,8 @@ solve eqs0 = go eqs0 []
            go eqs subs'
     go (Equation (Forall sc) (Forall sc') : eqs) subs'
       = do i <- newName
-           let b = instantiate sc [TyVar (TyGenerated i)]
-               b' = instantiate sc' [TyVar (TyGenerated i)]
+           let b = instantiate sc [TyVar (TyGenerated (head (names sc)) i)]
+               b' = instantiate sc' [TyVar (TyGenerated (head (names sc')) i)]
            go (Equation b b' : eqs) subs'
     go (Equation l r : _) _
       = throwError $ "Cannot unify " ++ show l ++ " with " ++ show r
@@ -262,7 +262,7 @@ isType (TyCon c as) = do n <- tyconExists c
 isType (Fun a b)    = isType a >> isType b
 isType (TyVar _)    = return ()
 isType (Forall sc)  = do i <- newName
-                         isType (instantiate sc [TyVar (TyGenerated i)])
+                         isType (instantiate sc [TyVar (TyGenerated (head (names sc)) i)])
 
 
 -- Inserting param variables into con data
@@ -289,7 +289,7 @@ instantiateQuantifiers t = return t
 inferify :: Term -> TypeChecker Type
 inferify (Var (Name x))
   = typeInDefinitions x
-inferify (Var (Generated i))
+inferify (Var (Generated _ i))
   = typeInContext i
 inferify (Ann m t)
   = do isType t
@@ -301,7 +301,7 @@ inferify (Lam sc)
        meta <- newMetaVar
        let arg = Meta meta
        ret <- extendContext [(i,arg)]
-                $ inferify (instantiate sc [Var (Generated i)])
+                $ inferify (instantiate sc [Var (Generated (head (names sc)) i)])
        subs <- substitution
        return $ Fun (instantiateMetas subs arg) ret
 inferify (App f a)
@@ -345,8 +345,8 @@ inferifyClause patTys (Clause psc sc)
                return (i,Meta m)
        let is = map fst ctx'
        extendContext ctx' $ do
-         zipWithM_ checkifyPattern (instantiate psc (map Generated is)) patTys
-         inferify (instantiate sc (map (Var . Generated) is))
+         zipWithM_ checkifyPattern (instantiate psc (zipWith (\x i -> Generated x i) (names sc) is)) patTys
+         inferify (instantiate sc (zipWith (\x i -> Var (Generated x i)) (names sc) is))
 
 
 inferifyClauses :: [Type] -> [Clause] -> TypeChecker Type
@@ -370,14 +370,14 @@ checkify :: Term -> Type -> TypeChecker ()
 checkify m (Forall sc)
   = do i <- newName
        extendTyVarContext [i]
-         $ checkify m (instantiate sc [TyVar (TyGenerated i)])
+         $ checkify m (instantiate sc [TyVar (TyGenerated (head (names sc)) i)])
 checkify (Var x) t
   = do t' <- inferify (Var x)
        equivQuantifiers t' t
 checkify (Lam sc) (Fun arg ret)
   = do i <- newName
        extendContext [(i,arg)]
-         $ checkify (instantiate sc [Var (Generated i)]) ret
+         $ checkify (instantiate sc [Var (Generated (head (names sc)) i)]) ret
 checkify (Lam sc) t
   = throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
               ++ "Against non-function type: " ++ show t
@@ -392,7 +392,7 @@ checkify m t
 equivQuantifiers :: Type -> Type -> TypeChecker ()
 equivQuantifiers t (Forall sc')
   = do i <- newName
-       equivQuantifiers t (instantiate sc' [TyVar (TyGenerated i)])
+       equivQuantifiers t (instantiate sc' [TyVar (TyGenerated (head (names sc')) i)])
 equivQuantifiers (Forall sc) t'
   = do meta <- newMetaVar
        let x2 = Meta meta
@@ -407,7 +407,7 @@ equivQuantifiers t t'
 checkifyPattern :: Pattern -> Type -> TypeChecker ()
 checkifyPattern (VarPat (Name _)) _
   = return ()
-checkifyPattern (VarPat (Generated i)) t
+checkifyPattern (VarPat (Generated _ i)) t
   = do t' <- typeInContext i
        unify t t'
 checkifyPattern (ConPat c ps) t
