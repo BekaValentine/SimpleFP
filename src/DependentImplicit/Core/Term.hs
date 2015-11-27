@@ -31,8 +31,12 @@ instance Show DeclArg where
 
 data Variable
   = Name String
-  | Generated Int
-  deriving (Eq)
+  | Generated String Int
+
+instance Eq Variable where
+  Name x == Name y = x == y
+  Generated _ i == Generated _ j = i == j
+  _ == _ = False
 
 data Term
   = Meta Int
@@ -74,7 +78,7 @@ caseMotiveLength (CaseMotiveCons _ sc)
 
 instance Show Variable where
   show (Name x) = x
-  show (Generated i) = "_" ++ show i
+  show (Generated x _) = x
 
 data PatternParenLoc = ExplConPatArg | ImplConPatArg
   deriving (Eq)
