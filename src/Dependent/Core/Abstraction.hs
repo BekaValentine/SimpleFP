@@ -43,8 +43,8 @@ instance Abstract String Term Term where
         case lookup x e of
           Nothing -> Var (Name x)
           Just m  -> m
-  abstract (Var (Generated i))
-    = return $ Var (Generated i)
+  abstract (Var (Generated x i))
+    = return $ Var (Generated x i)
   abstract (Ann m ty)
     = Ann <$> abstract m <*> return ty
   abstract Type
@@ -68,8 +68,8 @@ instance Abstract String Variable Term where
         case lookup x e of
           Nothing -> Var (Name x)
           Just y  -> Var y
-  abstract (Var (Generated i))
-    = return $ Var (Generated i)
+  abstract (Var (Generated x i))
+    = return $ Var (Generated x i)
   abstract (Ann m ty)
     = Ann <$> abstract m <*> return ty
   abstract Type
@@ -99,8 +99,8 @@ instance Abstract String Variable Pattern where
         case lookup x e of
           Nothing -> VarPat (Name x)
           Just y  -> VarPat y
-  abstract (VarPat (Generated i))
-    = return $ VarPat (Generated i)
+  abstract (VarPat (Generated x i))
+    = return $ VarPat (Generated x i)
   abstract (ConPat c ps)
     = ConPat c <$> mapM abstract ps
   abstract (AssertionPat m)

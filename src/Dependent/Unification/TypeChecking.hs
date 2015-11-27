@@ -131,13 +131,13 @@ solve eqs0 = go eqs0 []
       = go eqs subs'
     go (Equation (Fun a1 sc1) (Fun a2 sc2) : eqs) subs'
       = do i <- newName
-           let b1 = instantiate sc1 [Var (Generated i)]
-               b2 = instantiate sc2 [Var (Generated i)]
+           let b1 = instantiate sc1 [Var (Generated (head (names sc1)) i)]
+               b2 = instantiate sc2 [Var (Generated (head (names sc2)) i)]
            go (Equation a1 a2 : Equation b1 b2 : eqs) subs'
     go (Equation (Lam sc1) (Lam sc2) : eqs) subs'
       = do i <- newName
-           let b1 = instantiate sc1 [Var (Generated i)]
-               b2 = instantiate sc2 [Var (Generated i)]
+           let b1 = instantiate sc1 [Var (Generated (head (names sc1)) i)]
+               b2 = instantiate sc2 [Var (Generated (head (names sc2)) i)]
            go (Equation b1 b2 : eqs) subs'
     go (Equation (App f1 a1) (App f2 a2) : eqs) subs'
       = go (Equation f1 f2 : Equation a1 a2 : eqs) subs'
@@ -169,8 +169,8 @@ solve eqs0 = go eqs0 []
       = return [Equation a1 a2]
     goCaseMotive (CaseMotiveCons a1 sc1) (CaseMotiveCons a2 sc2)
       = do i <- newName
-           reqs <- goCaseMotive (instantiate sc1 [Var (Generated i)])
-                                (instantiate sc2 [Var (Generated i)])
+           reqs <- goCaseMotive (instantiate sc1 [Var (Generated (head (names sc1)) i)])
+                                (instantiate sc2 [Var (Generated (head (names sc2)) i)])
            return (Equation a1 a2 : reqs)
     goCaseMotive mot mot'
       = throwError $ "Motives not equal: " ++ show mot ++ " and " ++ show mot'
@@ -179,11 +179,13 @@ solve eqs0 = go eqs0 []
     goClauses [] [] = return []
     goClauses (Clause psc1 sc1:cs1) (Clause psc2 sc2:cs2)
       = do is <- replicateM (max (length (names sc1)) (length (names sc2))) newName
-           let xs = map Generated is
-               xs' = map Var xs
-           reqss <- zipWithM goPattern (instantiate psc1 xs) (instantiate psc2 xs)
+           let xs0 = zipWith Generated (names sc1) is
+               xs0' = map Var xs0
+               xs1 = zipWith Generated (names sc2) is
+               xs1' = map Var xs1
+           reqss <- zipWithM goPattern (instantiate psc1 xs0) (instantiate psc2 xs1)
            reqs' <- goClauses cs1 cs2
-           return (Equation (instantiate sc1 xs') (instantiate sc2 xs') : concat reqss ++ reqs')
+           return (Equation (instantiate sc1 xs0') (instantiate sc2 xs1') : concat reqss ++ reqs')
     goClauses _ _ = throwError $ "Mismatching number of clauses."
     
     goPattern :: Pattern -> Pattern -> TypeChecker [Equation]
@@ -299,7 +301,7 @@ inferify (Meta i)
               ++ " appears in checkable code, when it should not."
 inferify (Var (Name x))
   = typeInDefinitions x
-inferify (Var (Generated i))
+inferify (Var (Generated _ i))
   = typeInContext i
 inferify (Ann m t)
   = do checkify t Type
@@ -313,7 +315,7 @@ inferify (Fun arg sc)
   = do checkify arg Type
        i <- newName
        extendContext [(i,arg)]
-         $ checkify (instantiate sc [Var (Generated i)]) Type
+         $ checkify (instantiate sc [Var (Generated (head (names sc)) i)]) Type
        return Type
 inferify (Lam _)
   = throwError "Cannot infer the type of a lambda expression."
@@ -389,10 +391,10 @@ checkify (Lam sc) t
        case et of
          Fun arg sc' -> do
            i <- newName
-           eret <- evaluate (instantiate sc' [Var (Generated i)])
+           eret <- evaluate (instantiate sc' [Var (Generated (head (names sc')) i)])
            extendContext [(i,arg)]
              $ checkify
-                 (instantiate sc [Var (Generated i)])
+                 (instantiate sc [Var (Generated (head (names sc)) i)])
                  eret
          _ -> throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
               ++ "Against non-function type: " ++ show t
@@ -410,16 +412,16 @@ checkifyCaseMotive (CaseMotiveCons a sc)
   = do checkify a Type
        i <- newName
        extendContext [(i,a)]
-         $ checkifyCaseMotive (instantiate sc [Var (Generated i)])
+         $ checkifyCaseMotive (instantiate sc [Var (Generated (head (names sc)) i)])
 
 
 checkifyPattern :: Pattern -> Term -> TypeChecker Term
 checkifyPattern (VarPat (Name x)) _
   = return $ Var (Name x)
-checkifyPattern (VarPat (Generated i)) t
+checkifyPattern (VarPat (Generated x i)) t
   = do t' <- typeInContext i
        unify t t'
-       return $ Var (Generated i)
+       return $ Var (Generated x i)
 checkifyPattern (ConPat c ps0) t
   = do sig <- typeInSignature c
        (xs,ret) <- checkifyPatConArgs sig ps0 sig
@@ -459,9 +461,9 @@ checkifyClause (Clause psc sc0) motive
                 return (i, Meta m)
        let is = map fst ctx
        extendContext ctx $ do
-         ret <- checkPatternsMotive (instantiate psc (map Generated is)) motive
+         ret <- checkPatternsMotive (instantiate psc (zipWith Generated (names psc) is)) motive
          eret <- evaluate ret
-         checkify (instantiate sc0 (map (Var . Generated) is)) eret
+         checkify (instantiate sc0 (zipWith (\x i -> Var (Generated x i)) (names sc0) is)) eret
   where
     checkPatternsMotive :: [Pattern] -> CaseMotive -> TypeChecker Term
     checkPatternsMotive [] (CaseMotiveNil ret)
@@ -492,7 +494,7 @@ checkifyConSig (ConSigCons arg sc)
   = do checkify arg Type
        i <- newName
        extendContext [(i,arg)]
-         $ checkifyConSig (instantiate sc [Var (Generated i)])
+         $ checkifyConSig (instantiate sc [Var (Generated (head (names sc)) i)])
 
 
 

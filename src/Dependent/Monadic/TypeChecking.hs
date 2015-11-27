@@ -109,12 +109,12 @@ equalTerms Type Type
 equalTerms (Fun arg sc) (Fun arg' sc')
   = do equalTerms arg arg'
        i <- newName
-       equalTerms (instantiate sc [Var (Generated i)])
-                  (instantiate sc' [Var (Generated i)])
+       equalTerms (instantiate sc [Var (Generated (head (names sc)) i)])
+                  (instantiate sc' [Var (Generated (head (names sc')) i)])
 equalTerms (Lam sc) (Lam sc')
   = do i <- newName
-       equalTerms (instantiate sc [Var (Generated i)])
-                  (instantiate sc' [Var (Generated i)])
+       equalTerms (instantiate sc [Var (Generated (head (names sc)) i)])
+                  (instantiate sc' [Var (Generated (head (names sc')) i)])
 equalTerms (App f a) (App f' a')
   = do equalTerms f f'
        equalTerms a a'
@@ -145,18 +145,20 @@ equalTerms (Case as motive cs) (Case as' motive' cs')
     equalCaseMotives (CaseMotiveCons a sc) (CaseMotiveCons a' sc')
       = do equalTerms a a'
            i <- newName
-           equalCaseMotives (instantiate sc [Var (Generated i)])
-                            (instantiate sc' [Var (Generated i)])
+           equalCaseMotives (instantiate sc [Var (Generated (head (names sc)) i)])
+                            (instantiate sc' [Var (Generated (head (names sc')) i)])
     equalCaseMotives mot mot'
       = throwError $ "Motives not equal: " ++ show mot ++ " and " ++ show mot'
     
     equalClauses :: Clause -> Clause -> TypeChecker ()
     equalClauses (Clause psc sc) (Clause psc' sc')
       = do is <- replicateM (max (length (names sc)) (length (names sc'))) newName
-           let xs = map Generated is
-               xs' = map Var xs
-           zipWithM_ equalPattern (instantiate psc xs) (instantiate psc' xs)
-           equalTerms (instantiate sc xs') (instantiate sc' xs')
+           let xs0 = zipWith Generated (names sc) is
+               xs0' = map Var xs0
+               xs1 = zipWith Generated (names sc') is
+               xs1' = map Var xs1
+           zipWithM_ equalPattern (instantiate psc xs0) (instantiate psc' xs1)
+           equalTerms (instantiate sc xs0') (instantiate sc' xs1')
     
     equalPattern :: Pattern -> Pattern -> TypeChecker ()
     equalPattern (VarPat x) (VarPat x')
@@ -181,7 +183,7 @@ infer :: Term -> TypeChecker Term
 infer (Meta _) = error "Meta variables should not exist in this type checker."
 infer (Var (Name x))
   = typeInDefinitions x
-infer (Var (Generated i))
+infer (Var (Generated _ i))
   = typeInContext i
 infer (Ann m t)
   = do check t Type
@@ -194,7 +196,7 @@ infer (Fun arg sc)
   = do check arg Type
        i <- newName
        extendContext [(i,arg)]
-         $ check (instantiate sc [Var (Generated i)]) Type
+         $ check (instantiate sc [Var (Generated (head (names sc)) i)]) Type
        return Type
 infer (Lam _)
   = throwError "Cannot infer the type of a lambda expression."
@@ -266,9 +268,9 @@ check (Lam sc) t
          Fun arg sc' -> do
            check arg Type
            i <- newName
-           eret <- evaluate (instantiate sc' [Var (Generated i)])
+           eret <- evaluate (instantiate sc' [Var (Generated (head (names sc)) i)])
            extendContext [(i,arg)]
-             $ check (instantiate sc [Var (Generated i)])
+             $ check (instantiate sc [Var (Generated (head (names sc)) i)])
                      eret
          _ -> throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
               ++ "Against non-function type: " ++ show t
@@ -285,13 +287,13 @@ checkCaseMotive (CaseMotiveCons arg sc)
   = do check arg Type
        i <- newName
        extendContext [(i,arg)]
-         $ checkCaseMotive (instantiate sc [Var (Generated i)])
+         $ checkCaseMotive (instantiate sc [Var (Generated (head (names sc)) i)])
 
 checkPattern :: Pattern -> Term -> TypeChecker (Context,Term,[(Term,Term)])
 checkPattern (VarPat (Name x)) _
   = return ([], Var (Name x), [])
-checkPattern (VarPat (Generated i)) t
-  = return ([(i,t)], Var (Generated i), [])
+checkPattern (VarPat (Generated x i)) t
+  = return ([(i,t)], Var (Generated x i), [])
 checkPattern (ConPat c ps0) t
   = do consig <- typeInSignature c
        (ctx,xs,ret,delayed) <- checkPatConArgs consig ps0 consig
@@ -320,11 +322,11 @@ checkPattern (AssertionPat m) t
 checkClause :: Clause -> CaseMotive -> TypeChecker ()
 checkClause (Clause psc sc0) motive
   = do is <- replicateM (length (names sc0)) newName
-       (ctx,ret,delayed) <- checkPatternSeqMotive (instantiate psc (map Generated is)) motive
+       (ctx,ret,delayed) <- checkPatternSeqMotive (instantiate psc (zipWith Generated (names psc) is)) motive
        forM_ delayed $ \(m,t) -> extendContext ctx (check m t)
        eret <- evaluate ret
        extendContext ctx
-         $ check (instantiate sc0 (map (Var . Generated) is)) eret
+         $ check (instantiate sc0 (zipWith (\x i -> Var (Generated x i)) (names sc0) is)) eret
   where
     checkPatternSeqMotive :: [Pattern] -> CaseMotive -> TypeChecker (Context,Term,[(Term,Term)])
     checkPatternSeqMotive [] (CaseMotiveNil ret)
@@ -356,4 +358,4 @@ checkConSig (ConSigCons arg sc)
   = do check arg Type
        i <- newName
        extendContext [(i,arg)]
-         $ checkConSig (instantiate sc [Var (Generated i)])
+         $ checkConSig (instantiate sc [Var (Generated (head (names sc)) i)])
