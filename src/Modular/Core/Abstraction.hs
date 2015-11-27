@@ -37,8 +37,8 @@ instance Abstract String Term Term where
         case lookup x e of
           Nothing -> Var (Name x)
           Just m  -> m
-  abstract (Var (Generated i))
-    = return $ Var (Generated i)
+  abstract (Var (Generated x i))
+    = return $ Var (Generated x i)
   abstract (DottedVar m var)
     = return $ DottedVar m var
   abstract (Ann m ty)
@@ -63,10 +63,10 @@ instance Abstract Int Term Term where
     = return $ Meta i
   abstract (Var (Name x))
     = return $ Var (Name x)
-  abstract (Var (Generated i))
+  abstract (Var (Generated x i))
     = reader $ \e ->
         case lookup i e of
-          Nothing -> Var (Generated i)
+          Nothing -> Var (Generated x i)
           Just m  -> m
   abstract (DottedVar m var)
     = return $ DottedVar m var
@@ -95,8 +95,8 @@ instance Abstract String Variable Term where
         case lookup x e of
           Nothing -> Var (Name x)
           Just y  -> Var y
-  abstract (Var (Generated i))
-    = return $ Var (Generated i)
+  abstract (Var (Generated x i))
+    = return $ Var (Generated x i)
   abstract (DottedVar m var)
     = return $ DottedVar m var
   abstract (Ann m ty)
@@ -121,10 +121,10 @@ instance Abstract Int Variable Term where
     = return $ Meta i
   abstract (Var (Name x))
     = return $ Var (Name x)
-  abstract (Var (Generated i))
+  abstract (Var (Generated x i))
     = reader $ \e ->
         case lookup i e of
-          Nothing -> Var (Generated i)
+          Nothing -> Var (Generated x i)
           Just y  -> Var y
   abstract (DottedVar m var)
     = return $ DottedVar m var
@@ -167,8 +167,8 @@ instance Abstract String Variable Pattern where
         case lookup x e of
           Nothing -> VarPat (Name x)
           Just y  -> VarPat y
-  abstract (VarPat (Generated i))
-    = return $ VarPat (Generated i)
+  abstract (VarPat (Generated x i))
+    = return $ VarPat (Generated x i)
   abstract (ConPat c ps)
     = ConPat c <$> mapM abstract ps
   abstract (AssertionPat m)
@@ -177,10 +177,10 @@ instance Abstract String Variable Pattern where
 instance Abstract Int Variable Pattern where
   abstract (VarPat (Name x))
     = return $ VarPat (Name x)
-  abstract (VarPat (Generated i))
+  abstract (VarPat (Generated x i))
     = reader $ \e ->
         case lookup i e of
-          Nothing -> VarPat (Generated i)
+          Nothing -> VarPat (Generated x i)
           Just y  -> VarPat y
   abstract (ConPat c ps)
     = ConPat c <$> mapM abstract ps
