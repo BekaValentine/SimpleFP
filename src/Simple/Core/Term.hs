@@ -18,7 +18,7 @@ import Simple.Core.Type
 
 data Variable
   = Name String
-  | Generated Int
+  | Generated String Int
 
 data Term
   = Var Variable
@@ -41,7 +41,7 @@ data Pattern
 
 instance Show Variable where
   show (Name x) = x
-  show (Generated i) = "_" ++ show i
+  show (Generated x _) = x
 
 data PatternParenLoc = ConPatArg
   deriving (Eq)
@@ -84,8 +84,8 @@ instance ParenLoc Term where
 instance ParenRec Term where
   parenRec (Var (Name x))
     = x
-  parenRec (Var (Generated i))
-    = "_" ++ show i
+  parenRec (Var (Generated x _))
+    = x
   parenRec (Ann m t)
     = parenthesize (Just AnnLeft) m ++ " : " ++ show t
   parenRec (Lam sc)

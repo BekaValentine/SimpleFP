@@ -207,7 +207,7 @@ isType (Meta _)   = return ()
 inferify :: Term -> TypeChecker Type
 inferify (Var (Name x))
   = typeInDefinitions x
-inferify (Var (Generated i))
+inferify (Var (Generated _ i))
   = typeInContext i
 inferify (Ann m t)
   = do checkify m t
@@ -217,7 +217,7 @@ inferify (Lam sc)
        meta <- newMetaVar
        let arg = Meta meta
        ret <- extendContext [(i,arg)]
-                $ inferify (instantiate sc [Var (Generated i)])
+                $ inferify (instantiate sc [Var (Generated (head (names sc)) i)])
        subs <- substitution
        return $ Fun (instantiateMetas subs arg) ret
 inferify (App f a)
@@ -257,8 +257,8 @@ inferifyClause patTys (Clause psc sc)
                  return (i,Meta m)
        let is = map fst ctx'
        extendContext ctx' $ do
-         zipWithM_ checkifyPattern (instantiate psc (map Generated is)) patTys
-         inferify (instantiate sc (map (Var . Generated) is))
+         zipWithM_ checkifyPattern (instantiate psc (zipWith Generated (names sc) is)) patTys
+         inferify (instantiate sc (zipWith (\x i -> Var (Generated x i)) (names sc) is))
 
 
 inferifyClauses :: [Type] -> [Clause] -> TypeChecker Type
@@ -282,7 +282,7 @@ checkify :: Term -> Type -> TypeChecker ()
 checkify (Lam sc) (Fun arg ret)
   = do i <- newName
        extendContext [(i,arg)]
-         $ checkify (instantiate sc [Var (Generated i)]) ret
+         $ checkify (instantiate sc [Var (Generated (head (names sc)) i)]) ret
 checkify (Lam sc) t
   = throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
               ++ "Against non-function type: " ++ show t
@@ -297,7 +297,7 @@ checkify m t
 checkifyPattern :: Pattern -> Type -> TypeChecker ()
 checkifyPattern (VarPat (Name _)) _
   = return ()
-checkifyPattern (VarPat (Generated i)) t
+checkifyPattern (VarPat (Generated _ i)) t
   = do t' <- typeInContext i
        unify t t'
 checkifyPattern (ConPat c ps) t

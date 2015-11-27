@@ -43,8 +43,8 @@ instance Eval (Environment String Term) Term where
          case lookup x env of
            Nothing -> throwError $ "Unknown constant/defined term: " ++ x
            Just m  -> return m
-  eval (Var (Generated i))
-    = return $ Var (Generated i)
+  eval (Var (Generated x i))
+    = return $ Var (Generated x i)
   eval (Ann m _)
     = eval m
   eval (Lam sc)

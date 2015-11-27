@@ -129,7 +129,7 @@ isType (Meta _)   = throwError "Meta variables should not be present in the this
 infer :: Term -> TypeChecker Type
 infer (Var (Name x))
   = typeInDefinitions x
-infer (Var (Generated i))
+infer (Var (Generated _ i))
   = typeInContext i
 infer (Ann m t)
   = check m t >> return t
@@ -161,9 +161,9 @@ inferClause patTys (Clause psc sc)
          $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
                      ++ " but found " ++ show lps
        is <- replicateM (length (names sc)) newName
-       ctx' <- fmap concat $ zipWithM checkPattern (instantiate psc (map Generated is)) patTys
+       ctx' <- fmap concat $ zipWithM checkPattern (instantiate psc (zipWith Generated (names sc) is)) patTys
        extendContext ctx'
-         $ infer (instantiate sc (map (Var . Generated) is))
+         $ infer (instantiate sc (zipWith (\x i -> Var (Generated x i)) (names sc) is))
 
 inferClauses :: [Type] -> [Clause] -> TypeChecker Type
 inferClauses patTys cs
@@ -184,7 +184,7 @@ check :: Term -> Type -> TypeChecker ()
 check (Lam sc) (Fun arg ret)
   = do i <- newName
        extendContext [(i,arg)]
-         $ check (instantiate sc [Var (Generated i)]) ret
+         $ check (instantiate sc [Var (Generated (head (names sc)) i)]) ret
 check (Lam sc) t
   = throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
               ++ "Against non-function type: " ++ show t
@@ -200,7 +200,7 @@ check m t
 checkPattern :: Pattern -> Type -> TypeChecker Context
 checkPattern (VarPat (Name _)) _
   = return []
-checkPattern (VarPat (Generated i)) t
+checkPattern (VarPat (Generated _ i)) t
   = return [(i,t)]
 checkPattern (ConPat c ps) t
   = do ConSig args ret <- typeInSignature c
