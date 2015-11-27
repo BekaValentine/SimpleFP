@@ -178,8 +178,8 @@ solve eqs0 = go eqs0 []
                          ++ show (Fun plic1 a1 sc1) ++ " with "
                          ++ show (Fun plic2 a2 sc2)
            i <- newName
-           let b1 = instantiate sc1 [Var (Generated i)]
-               b2 = instantiate sc2 [Var (Generated i)]
+           let b1 = instantiate sc1 [Var (Generated (head (names sc1)) i)]
+               b2 = instantiate sc2 [Var (Generated (head (names sc2)) i)]
            go (Equation a1 a2 : Equation b1 b2 : eqs) subs'
     go (Equation (Lam plic1 sc1) (Lam plic2 sc2) : eqs) subs'
       = do unless (plic1 == plic2)
@@ -187,8 +187,8 @@ solve eqs0 = go eqs0 []
                          ++ show (Lam plic1 sc1) ++ " with "
                          ++ show (Lam plic2 sc2)
            i <- newName
-           let b1 = instantiate sc1 [Var (Generated i)]
-               b2 = instantiate sc2 [Var (Generated i)]
+           let b1 = instantiate sc1 [Var (Generated (head (names sc1)) i)]
+               b2 = instantiate sc2 [Var (Generated (head (names sc2)) i)]
            go (Equation b1 b2 : eqs) subs'
     go (Equation (App plic1 f1 a1) (App plic2 f2 a2) : eqs) subs'
       = do unless (plic1 == plic2)
@@ -249,8 +249,8 @@ solve eqs0 = go eqs0 []
       = return [Equation a1 a2]
     goCaseMotive (CaseMotiveCons a1 sc1) (CaseMotiveCons a2 sc2)
       = do i <- newName
-           reqs <- goCaseMotive (instantiate sc1 [Var (Generated i)])
-                                (instantiate sc2 [Var (Generated i)])
+           reqs <- goCaseMotive (instantiate sc1 [Var (Generated (head (names sc1)) i)])
+                                (instantiate sc2 [Var (Generated (head (names sc2)) i)])
            return (Equation a1 a2 : reqs)
     goCaseMotive mot mot'
       = throwError $ "Motives not equal: " ++ show mot ++ " and " ++ show mot'
@@ -259,11 +259,13 @@ solve eqs0 = go eqs0 []
     goClauses [] [] = return []
     goClauses (Clause psc1 sc1:cs1) (Clause psc2 sc2:cs2)
       = do is <- replicateM (max (length (names sc1)) (length (names sc2))) newName
-           let xs = map Generated is
-               xs' = map Var xs
-           reqss <- zipWithM goPattern (instantiate psc1 xs) (instantiate psc2 xs)
+           let xs1 = zipWith Generated (names sc1) is
+               xs1' = map Var xs1
+               xs2 = zipWith Generated (names sc2) is
+               xs2' = map Var xs2
+           reqss <- zipWithM goPattern (instantiate psc1 xs1) (instantiate psc2 xs2)
            reqs' <- goClauses cs1 cs2
-           return (Equation (instantiate sc1 xs') (instantiate sc2 xs') : concat reqss ++ reqs')
+           return (Equation (instantiate sc1 xs1') (instantiate sc2 xs2') : concat reqss ++ reqs')
     goClauses _ _ = throwError $ "Mismatching number of clauses."
     
     goPattern :: Pattern -> Pattern -> TypeChecker [Equation]
@@ -580,9 +582,9 @@ inferify (Meta i)
 inferify (Var (Name x0))
   = do ((m,x),t) <- typeInDefinitions x0
        return (DottedVar m x, t)
-inferify (Var (Generated i))
+inferify (Var (Generated x i))
   = do t <- typeInContext i
-       return (Var (Generated i), t)
+       return (Var (Generated x i), t)
 inferify (DottedVar m x)
   = do ((m',x'),t) <- dottedTypeInDefinitions m x
        return (DottedVar m' x', t)
@@ -598,7 +600,7 @@ inferify (Fun plic arg sc)
   = do arg' <- checkify arg Type
        i <- newName
        ret' <- extendContext [(i,arg')]
-                 $ checkify (instantiate sc [Var (Generated i)]) Type
+                 $ checkify (instantiate sc [Var (Generated (head (names sc)) i)]) Type
        let sc' :: Scope Term Term
            sc' = Scope (names sc) (abstractOver [i] ret')
        subs <- substitution
@@ -712,7 +714,7 @@ inferify (RecordType tele)
       = do t' <- checkify t Type
            i <- newName
            m' <- extendContext [(i,t')]
-                   $ checkifyTelescope (instantiate sc [Var (Generated i)])
+                   $ checkifyTelescope (instantiate sc [Var (Generated (head (names sc)) i)])
            return (TelescopeCons x t' (Scope (names sc) (abstractOver [i] m')))
 inferify (RecordCon _)
   = throwError "Cannot infer the type of a record expression."
@@ -741,25 +743,25 @@ checkify (Lam plic sc) t
        case (plic,et) of
          (Expl, Fun Expl arg sc') -> -- \x -> M : (x : A) -> B
            do i <- newName
-              eret <- evaluate (instantiate sc' [Var (Generated i)])
+              eret <- evaluate (instantiate sc' [Var (Generated (head (names sc')) i)])
               m' <- extendContext [(i,arg)]
                       $ checkify
-                          (instantiate sc [Var (Generated i)])
+                          (instantiate sc [Var (Generated (head (names sc)) i)])
                           eret
               subs <- substitution
               return (instantiateMetas subs (Lam Expl (Scope (names sc) (abstractOver [i] m'))))
          (Impl, Fun Impl arg sc') -> -- \{y} -> M : {y : A} -> B
            do i <- newName
-              eret <- evaluate (instantiate sc' [Var (Generated i)])
+              eret <- evaluate (instantiate sc' [Var (Generated (head (names sc')) i)])
               m' <- extendContext [(i,arg)]
                       $ checkify
-                          (instantiate sc [Var (Generated i)])
+                          (instantiate sc [Var (Generated (head (names sc)) i)])
                           eret
               subs <- substitution
               return (instantiateMetas subs (Lam Impl (Scope (names sc) (abstractOver [i] m'))))
          (Expl, Fun Impl arg sc') -> -- \x -> M : {y : A} -> B
            do i <- newName
-              eret <- evaluate (instantiate sc' [Var (Generated i)])
+              eret <- evaluate (instantiate sc' [Var (Generated (head (names sc')) i)])
               f' <- extendContext [(i,arg)]
                       $ checkify
                           (Lam Expl sc)
@@ -847,7 +849,7 @@ checkifyCaseMotive (CaseMotiveCons a sc)
   = do a' <- checkify a Type
        i <- newName
        b' <- extendContext [(i,a')]
-               $ checkifyCaseMotive (instantiate sc [Var (Generated i)])
+               $ checkifyCaseMotive (instantiate sc [Var (Generated (head (names sc)) i)])
        subs <- substitution
        return (instantiateMetasCaseMotive subs (CaseMotiveCons a' (Scope (names sc) (abstractOver [i] b'))))
 
@@ -855,10 +857,10 @@ checkifyCaseMotive (CaseMotiveCons a sc)
 checkifyPattern :: Pattern -> Term -> TypeChecker (Pattern,Term)
 checkifyPattern (VarPat (Name x)) _
   = return (VarPat (Name x), Var (Name x))
-checkifyPattern (VarPat (Generated i)) t
+checkifyPattern (VarPat (Generated x i)) t
   = do t' <- typeInContext i
        unify t t'
-       return (VarPat (Generated i), Var (Generated i))
+       return (VarPat (Generated x i), Var (Generated x i))
 checkifyPattern (ConPat c ps0) t
   = do (unaliasedC,sig) <- typeInSignature c
        (ps',xs,ret) <- checkifyPatConArgs sig ps0 sig
@@ -928,9 +930,9 @@ checkifyClause (Clause psc sc0) motive
                 return (i, Meta m)
        let is = map fst ctx
        extendContext ctx $ do
-         (ps',ret) <- checkPatternsMotive (instantiate psc (map Generated is)) motive
+         (ps',ret) <- checkPatternsMotive (instantiate psc (zipWith Generated (names psc) is)) motive
          eret <- evaluate ret
-         m' <- checkify (instantiate sc0 (map (Var . Generated) is)) eret
+         m' <- checkify (instantiate sc0 (zipWith (\x i -> Var (Generated x i)) (names sc0) is)) eret
          return $ Clause (Scope (names psc) (abstractOver is ps'))
                          (Scope (names sc0) (abstractOver is m'))
   where
@@ -969,7 +971,7 @@ checkifyConSig (ConSigCons plic arg sc)
   = do arg' <- checkify arg Type
        i <- newName
        t <- extendContext [(i,arg')]
-              $ checkifyConSig (instantiate sc [Var (Generated i)])
+              $ checkifyConSig (instantiate sc [Var (Generated (head (names sc)) i)])
        return (ConSigCons plic arg' (Scope (names sc) (abstractOver [i] t)))
 
 
