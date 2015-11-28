@@ -60,7 +60,7 @@ type Definitions = [(String,Term,Type)]
 
 -- Contexts
 
-type Context = [(Int,Type)]
+type Context = [(Int,String,Type)]
 
 type TyVarContext = [Int]
 
@@ -195,7 +195,7 @@ addSubstitutions subs0
     substituteContext
       = do ctx <- context
            subs2 <- substitution
-           putContext (map (\(x,t) -> (x,instantiateMetas subs2 t)) ctx)
+           putContext (map (\(i,x,t) -> (i,x,instantiateMetas subs2 t)) ctx)
 
 
 unify :: Type -> Type -> TypeChecker ()
@@ -220,9 +220,9 @@ instantiateMetas subs (Forall sc)
 typeInContext :: Int -> TypeChecker Type
 typeInContext i
   = do ctx <- context
-       case lookup i ctx of
-         Nothing -> throwError "Unbound automatically generated variable."
-         Just t  -> return t
+       case find (\(j,_,_) -> j == i) ctx of
+         Nothing      -> throwError "Unbound automatically generated variable."
+         Just (_,_,t) -> return t
 
 typeInDefinitions :: String -> TypeChecker Type
 typeInDefinitions n
@@ -300,7 +300,7 @@ inferify (Lam sc)
   = do i <- newName
        meta <- newMetaVar
        let arg = Meta meta
-       ret <- extendContext [(i,arg)]
+       ret <- extendContext [(i, head (names sc), arg)]
                 $ inferify (instantiate sc [Var (Generated (head (names sc)) i)])
        subs <- substitution
        return $ Fun (instantiateMetas subs arg) ret
@@ -339,11 +339,11 @@ inferifyClause patTys (Clause psc sc)
        unless (length patTys == lps)
          $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
                      ++ " but found " ++ show lps
-       ctx' <- replicateM (length (names sc)) $ do
+       ctx' <- forM (names sc) $ \x -> do
                i <- newName
                m <- newMetaVar
-               return (i,Meta m)
-       let is = map fst ctx'
+               return (i, x, Meta m)
+       let is = [ i | (i,_,_) <- ctx' ]
        extendContext ctx' $ do
          zipWithM_ checkifyPattern (instantiate psc (zipWith (\x i -> Generated x i) (names sc) is)) patTys
          inferify (instantiate sc (zipWith (\x i -> Var (Generated x i)) (names sc) is))
@@ -376,7 +376,7 @@ checkify (Var x) t
        equivQuantifiers t' t
 checkify (Lam sc) (Fun arg ret)
   = do i <- newName
-       extendContext [(i,arg)]
+       extendContext [(i, head (names sc), arg)]
          $ checkify (instantiate sc [Var (Generated (head (names sc)) i)]) ret
 checkify (Lam sc) t
   = throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
