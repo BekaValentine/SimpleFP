@@ -50,7 +50,7 @@ definitionsToEnvironment defs
 
 -- Contexts
 
-type Context = [(Int,Type)]
+type Context = [(Int,String,Type)]
 
 
 
@@ -109,9 +109,9 @@ typeInDefinitions x
 typeInContext :: Int -> TypeChecker Type
 typeInContext i
   = do ctx <- context
-       case lookup i ctx of
-         Nothing -> throwError "Unbound automatically generated variable."
-         Just t  -> return t
+       case find (\(j,_,_) -> j == i) ctx of
+         Nothing      -> throwError "Unbound automatically generated variable."
+         Just (_,_,t) -> return t
 
 
 
@@ -183,7 +183,7 @@ inferClauses patTys cs
 check :: Term -> Type -> TypeChecker ()
 check (Lam sc) (Fun arg ret)
   = do i <- newName
-       extendContext [(i,arg)]
+       extendContext [(i, head (names sc), arg)]
          $ check (instantiate sc [Var (Generated (head (names sc)) i)]) ret
 check (Lam sc) t
   = throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
@@ -200,8 +200,8 @@ check m t
 checkPattern :: Pattern -> Type -> TypeChecker Context
 checkPattern (VarPat (Name _)) _
   = return []
-checkPattern (VarPat (Generated _ i)) t
-  = return [(i,t)]
+checkPattern (VarPat (Generated x i)) t
+  = return [(i,x,t)]
 checkPattern (ConPat c ps) t
   = do ConSig args ret <- typeInSignature c
        let lps = length ps
