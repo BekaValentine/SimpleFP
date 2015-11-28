@@ -27,7 +27,7 @@ type Definitions = [(String,Term,Term)]
 
 -- Contexts
 
-type Context = [(Int,Term)]
+type Context = [(Int,String,Term)]
 
 
 
@@ -79,9 +79,9 @@ typeInDefinitions x
 typeInContext :: Int -> TypeChecker Term
 typeInContext i
   = do ctx <- context
-       case lookup i ctx of
-         Nothing -> throwError "Unbound automatically generated variable."
-         Just t  -> return t
+       case find (\(j,_,_) -> j == i) ctx of
+         Nothing      -> throwError "Unbound automatically generated variable."
+         Just (_,_,t) -> return t
 
 evaluate :: Term -> TypeChecker Term
 evaluate m
@@ -195,7 +195,7 @@ infer Type
 infer (Fun arg sc)
   = do check arg Type
        i <- newName
-       extendContext [(i,arg)]
+       extendContext [(i, head (names sc), arg)]
          $ check (instantiate sc [Var (Generated (head (names sc)) i)]) Type
        return Type
 infer (Lam _)
@@ -269,7 +269,7 @@ check (Lam sc) t
            check arg Type
            i <- newName
            eret <- evaluate (instantiate sc' [Var (Generated (head (names sc)) i)])
-           extendContext [(i,arg)]
+           extendContext [(i, head (names sc), arg)]
              $ check (instantiate sc [Var (Generated (head (names sc)) i)])
                      eret
          _ -> throwError $ "Cannot check term: " ++ show (Lam sc) ++ "\n"
@@ -286,14 +286,14 @@ checkCaseMotive (CaseMotiveNil ret)
 checkCaseMotive (CaseMotiveCons arg sc)
   = do check arg Type
        i <- newName
-       extendContext [(i,arg)]
+       extendContext [(i, head (names sc), arg)]
          $ checkCaseMotive (instantiate sc [Var (Generated (head (names sc)) i)])
 
 checkPattern :: Pattern -> Term -> TypeChecker (Context,Term,[(Term,Term)])
 checkPattern (VarPat (Name x)) _
   = return ([], Var (Name x), [])
 checkPattern (VarPat (Generated x i)) t
-  = return ([(i,t)], Var (Generated x i), [])
+  = return ([(i,x,t)], Var (Generated x i), [])
 checkPattern (ConPat c ps0) t
   = do consig <- typeInSignature c
        (ctx,xs,ret,delayed) <- checkPatConArgs consig ps0 consig
@@ -357,5 +357,5 @@ checkConSig (ConSigNil ret)
 checkConSig (ConSigCons arg sc)
   = do check arg Type
        i <- newName
-       extendContext [(i,arg)]
+       extendContext [(i, head (names sc), arg)]
          $ checkConSig (instantiate sc [Var (Generated (head (names sc)) i)])

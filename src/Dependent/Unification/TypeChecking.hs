@@ -29,7 +29,7 @@ type Definitions = [(String,Term,Term)]
 
 -- Contexts
 
-type Context = [(Int,Term)]
+type Context = [(Int,String,Term)]
 
 
 
@@ -217,7 +217,7 @@ addSubstitutions subs0
     substituteContext
       = do ctx <- context
            subs <- substitution
-           putContext (map (\(x,t) -> (x, instantiateMetas subs t)) ctx)
+           putContext (map (\(i,x,t) -> (i, x, instantiateMetas subs t)) ctx)
 
 
 
@@ -280,9 +280,9 @@ typeInDefinitions x
 typeInContext :: Int -> TypeChecker Term
 typeInContext i
   = do ctx <- context
-       case lookup i ctx of
-         Nothing -> throwError "Unbound automatically generated variable."
-         Just t  -> return t
+       case find (\(j,_,_) -> j == i) ctx of
+         Nothing      -> throwError "Unbound automatically generated variable."
+         Just (_,_,t) -> return t
 
 evaluate :: Term -> TypeChecker Term
 evaluate m
@@ -314,7 +314,7 @@ inferify Type
 inferify (Fun arg sc)
   = do checkify arg Type
        i <- newName
-       extendContext [(i,arg)]
+       extendContext [(i, head (names sc), arg)]
          $ checkify (instantiate sc [Var (Generated (head (names sc)) i)]) Type
        return Type
 inferify (Lam _)
@@ -391,8 +391,8 @@ checkify (Lam sc) t
        case et of
          Fun arg sc' -> do
            i <- newName
-           eret <- evaluate (instantiate sc' [Var (Generated (head (names sc')) i)])
-           extendContext [(i,arg)]
+           eret <- evaluate (instantiate sc' [Var (Generated (head (names sc)) i)])
+           extendContext [(i, head (names sc), arg)]
              $ checkify
                  (instantiate sc [Var (Generated (head (names sc)) i)])
                  eret
@@ -411,7 +411,7 @@ checkifyCaseMotive (CaseMotiveNil a)
 checkifyCaseMotive (CaseMotiveCons a sc)
   = do checkify a Type
        i <- newName
-       extendContext [(i,a)]
+       extendContext [(i, head (names sc), a)]
          $ checkifyCaseMotive (instantiate sc [Var (Generated (head (names sc)) i)])
 
 
@@ -455,11 +455,11 @@ checkifyPattern (AssertionPat m) t
 
 checkifyClause :: Clause -> CaseMotive -> TypeChecker ()
 checkifyClause (Clause psc sc0) motive
-  = do ctx <- replicateM (length (names sc0)) $ do
+  = do ctx <- forM (names sc0) $ \x -> do
                 i <- newName
                 m <- newMetaVar
-                return (i, Meta m)
-       let is = map fst ctx
+                return (i, x, Meta m)
+       let is = [ i | (i,_,_) <- ctx ]
        extendContext ctx $ do
          ret <- checkPatternsMotive (instantiate psc (zipWith Generated (names psc) is)) motive
          eret <- evaluate ret
@@ -493,7 +493,7 @@ checkifyConSig (ConSigNil ret)
 checkifyConSig (ConSigCons arg sc)
   = do checkify arg Type
        i <- newName
-       extendContext [(i,arg)]
+       extendContext [(i, head (names sc), arg)]
          $ checkifyConSig (instantiate sc [Var (Generated (head (names sc)) i)])
 
 
