@@ -32,8 +32,8 @@ instance Abstract a b Term => Abstract a b CaseMotive where
 instance Abstract a b Term => Abstract a b Telescope where
   abstract TelescopeNil
     = return TelescopeNil
-  abstract (TelescopeCons x t sc)
-    = TelescopeCons x <$> abstract t <*> abstractScope sc
+  abstract (TelescopeCons t sc)
+    = TelescopeCons <$> abstract t <*> abstractScope sc
 
 instance Abstract String Term Term where
   abstract (Meta i)
@@ -234,7 +234,7 @@ telescopeHelper []
   = TelescopeNil
 telescopeHelper ((x,t):xts)
   = let tele = telescopeHelper xts
-    in TelescopeCons x t (scope [x] tele)
+    in TelescopeCons t (scope [x] tele)
 
 instance Abstract a Term Term => Abstract a Term (ConSig Term) where
   abstract (ConSigNil a)

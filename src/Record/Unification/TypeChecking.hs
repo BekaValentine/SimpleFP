@@ -132,7 +132,7 @@ occurs x (OpenIn _ m)       = occurs x m
 occurs x (RecordType tele)  = occursTelescope tele
   where
     occursTelescope TelescopeNil = False
-    occursTelescope (TelescopeCons _ t sc) = occurs x t || occursTelescope (descope (Var . Name) sc)
+    occursTelescope (TelescopeCons t sc) = occurs x t || occursTelescope (descope (Var . Name) sc)
 occurs x (RecordCon fields) = any (occurs x . snd) fields
 occurs x (RecordDot m _)    = occurs x m
 
@@ -293,9 +293,9 @@ solve eqs0 = go eqs0 []
     goTelescope :: Telescope -> Telescope -> TypeChecker [Equation]
     goTelescope TelescopeNil TelescopeNil
       = return []
-    goTelescope (TelescopeCons x1 t1 sc1) (TelescopeCons x2 t2 sc2)
-      = do unless (x1 == x2)
-             $ throwError $ "Mismatching record field names: " ++ x1 ++ " and " ++ x2
+    goTelescope (TelescopeCons t1 sc1) (TelescopeCons t2 sc2)
+      = do unless (names sc1 == names sc2)
+             $ throwError $ "Mismatching record field names: " ++ unwords (names sc1) ++ " and " ++ unwords (names sc2)
            eqs' <- goTelescope (descope (Var . Name) sc1) (descope (Var . Name) sc2)
            return (Equation t1 t2:eqs')
     goTelescope _ _
@@ -377,8 +377,8 @@ instantiateMetas subs (RecordType tele)
   where
     instantiateMetasTelescope TelescopeNil
       = TelescopeNil
-    instantiateMetasTelescope (TelescopeCons x t sc)
-      = TelescopeCons x
+    instantiateMetasTelescope (TelescopeCons t sc)
+      = TelescopeCons
           (instantiateMetas subs t)
           (instantiateMetasTelescope <$> sc)
 instantiateMetas subs (RecordCon fields)
@@ -710,12 +710,12 @@ inferify (RecordType tele)
   where
     checkifyTelescope TelescopeNil
       = return TelescopeNil
-    checkifyTelescope (TelescopeCons x t sc)
+    checkifyTelescope (TelescopeCons t sc)
       = do t' <- checkify t Type
            i <- newName
            m' <- extendContext [(i, head (names sc), t')]
                    $ checkifyTelescope (instantiate sc [Var (Generated (head (names sc)) i)])
-           return (TelescopeCons x t' (Scope (names sc) (abstractOver [i] m')))
+           return (TelescopeCons t' (Scope (names sc) (abstractOver [i] m')))
 inferify (RecordCon _)
   = throwError "Cannot infer the type of a record expression."
 inferify (RecordDot m x)
@@ -728,9 +728,11 @@ inferify (RecordDot m x)
          t' -> throwError $ "Expecting a record type but found " ++ show t'
   where
     lookupField _ _ TelescopeNil = Nothing
-    lookupField m' f (TelescopeCons f' t sc)
-      | f == f'   = Just t
-      | otherwise = lookupField m' f (instantiate sc [RecordDot m' f'])
+    lookupField m' f (TelescopeCons t sc)
+      | f == head (names sc)
+        = Just t
+      | otherwise
+        = lookupField m' f (instantiate sc [RecordDot m' (head (names sc))])
 
 
 -- Type Checking
@@ -820,18 +822,18 @@ checkify (RecordCon fields) t
   where
     checkifyFields [] TelescopeNil
       = return []
-    checkifyFields [] (TelescopeCons x _ _)
-      = throwError $ "Missing record field " ++ x
+    checkifyFields [] (TelescopeCons _ sc)
+      = throwError $ "Missing record field " ++ unwords (names sc)
     checkifyFields _ TelescopeNil
       = throwError $ "Mismatching number of record fields."
-    checkifyFields xs (TelescopeCons x t' sc)
-      = case extract (\(x',_) -> x == x') xs of
-          Nothing -> throwError $ "Missing record field " ++ x
-          Just ((_,m),xs') -> do
+    checkifyFields xs (TelescopeCons t' sc)
+      = case extract (\(x',_) -> x' == head (names sc)) xs of
+          Nothing -> throwError $ "Missing record field " ++ unwords (names sc)
+          Just ((x',m),xs') -> do
             et' <- evaluate t'
             m' <- checkify m et'
             fields' <- checkifyFields xs' (instantiate sc [m'])
-            return ((x,m'):fields')
+            return ((x',m'):fields')
 checkify m t
   = do (m',t') <- inferify m
        et <- evaluate t

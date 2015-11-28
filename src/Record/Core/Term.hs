@@ -77,7 +77,7 @@ instance Show Constructor where
 
 data Telescope
   = TelescopeNil
-  | TelescopeCons String Term (Scope Term Telescope)
+  | TelescopeCons Term (Scope Term Telescope)
 
 data Term
   = Meta Int
@@ -253,8 +253,8 @@ instance ParenRec Term where
     where
       auxTelescope :: Telescope -> [String]
       auxTelescope TelescopeNil = []
-      auxTelescope (TelescopeCons x t sc)
-        = let f = x ++ " : " ++ parenthesize Nothing t
+      auxTelescope (TelescopeCons t sc)
+        = let f = unwords (names sc) ++ " : " ++ parenthesize Nothing t
               fs = auxTelescope (descope (Var . Name) sc)
           in f:fs
   parenRec (RecordCon fields)
