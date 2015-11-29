@@ -220,15 +220,24 @@ whereTermDecl = do (x,t) <- try $ do
                      _ <- reserved "where"
                      return (x,t)
                    _ <- optional (reservedOp "|")
-                   clauses@(Clause psc _:_) <- patternMatchClause x `sepBy1` reservedOp "|"
+                   preclauses <- patternMatchClause x `sepBy1` reservedOp "|"
                    _ <- reserved "end"
-                   let psLength = length (descope Name psc)
-                       mot = motiveAux psLength t
-                   unless (psLength <= functionArgsLength t)
-                     $ fail $ "Cannot build a case expression motive for fewer than " ++ show psLength
-                           ++ " args from the type " ++ show t
-                   return $ TermDeclaration x t (lambdaAux (\as -> Case as mot clauses) psLength)
+                   case preclauses of
+                     [(ps,xs,b)] | all isVar ps
+                       -> return $ TermDeclaration x t (helperFold lamHelper xs b)
+                     (ps0,_,_):_
+                       -> do let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
+                                 psLength = length ps0
+                                 mot = motiveAux psLength t
+                             unless (psLength <= functionArgsLength t)
+                               $ fail $ "Cannot build a case expression motive for fewer than " ++ show psLength
+                                     ++ " args from the type " ++ show t
+                             return $ TermDeclaration x t (lambdaAux (\as -> Case as mot clauses) psLength)
   where
+    isVar :: Pattern -> Bool
+    isVar (VarPat _) = True
+    isVar _ = False
+    
     lambdaAux :: ([Term] -> Term) -> Int -> Term
     lambdaAux f 0 = f []
     lambdaAux f n = Lam (Scope ["_" ++ show n] $ \[x] -> lambdaAux (f . (x:)) (n-1))
@@ -245,7 +254,7 @@ patternMatchClause x = do _ <- symbol x
                           (ps,xs) <- wherePatternSeq
                           _ <- reservedOp "="
                           b <- term
-                          return $ clauseHelper ps xs b
+                          return (ps,xs,b)
 
 wherePattern = assertionPattern <|> parenPattern <|> noArgConPattern <|> varPattern
 
