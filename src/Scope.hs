@@ -17,6 +17,9 @@ abstractScope (Scope ns f)
 scope :: Abstract String s a => [String] -> a -> Scope s a
 scope xs m = Scope xs (abstractOverDummies xs m)
 
+scope2 :: Abstract String s a => [String] -> [String] -> a -> Scope s a
+scope2 xs xs' m = Scope xs (abstractOverDummies xs' m)
+
 descope :: (String -> s) -> Scope s a -> a
 descope f sc = instantiate sc (map f (names sc))
 

@@ -6,6 +6,7 @@ module Poly.Core.Parser where
 
 import Control.Applicative ((<$>),(*>),(<*),(<*>))
 import Control.Monad.Reader
+import qualified Control.Monad.State as S
 import Data.List (foldl')
 import Text.Parsec
 import qualified Text.Parsec.Token as Token
@@ -59,7 +60,29 @@ lamHelper :: String -> Term -> Term
 lamHelper x b = Lam (scope [x] b)
 
 clauseHelper :: [Pattern] -> [String] -> Term -> Clause
-clauseHelper ps xs b = Clause (scope xs ps) (scope xs b)
+clauseHelper ps xs b = Clause (scope2 xs cleanedXs cleanedPs) (scope xs b)
+  where
+    cleanedXs = fst (S.runState (mapM cleanXs xs) 0)
+    
+    cleanXs :: String -> S.State Int String
+    cleanXs "_" = do i <- S.get
+                     S.put (i+1)
+                     return $ "$" ++ show i
+    cleanXs x = return x
+    
+    cleanedPs = fst (S.runState (mapM cleanPs ps) 0)
+    
+    cleanPs :: Pattern -> S.State Int Pattern
+    cleanPs (VarPat (Name "_"))
+      = do i <- S.get
+           S.put (i+1)
+           return $ VarPat (Name ("$" ++ show i))
+    cleanPs (VarPat (Name n))
+      = return $ VarPat (Name n)
+    cleanPs (VarPat (Generated n i))
+      = return $ VarPat (Generated n i)
+    cleanPs (ConPat c ps)
+      = ConPat c <$> mapM cleanPs ps
 
 instance Abstract String Type Type where
   abstract (Meta i)
