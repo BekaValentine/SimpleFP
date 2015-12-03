@@ -720,7 +720,8 @@ inferify (RecordCon _)
   = throwError "Cannot infer the type of a record expression."
 inferify (RecordDot m x)
   = do (m',t) <- inferify m
-       case t of
+       et <- evaluate t
+       case et of
          RecordType tele
             -> case lookupField m' x tele of
                  Nothing -> throwError $ "Missing field " ++ x
