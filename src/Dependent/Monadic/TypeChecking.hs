@@ -152,13 +152,15 @@ equalTerms (Case as motive cs) (Case as' motive' cs')
     
     equalClauses :: Clause -> Clause -> TypeChecker ()
     equalClauses (Clause psc sc) (Clause psc' sc')
-      = do is <- replicateM (max (length (names sc)) (length (names sc'))) newName
-           let xs0 = zipWith Generated (names sc) is
+      = do unless (length (names psc) == length (names psc'))
+             $ throwError "Patterns bind different numbers of arguments."
+           is <- replicateM (length (names psc)) newName
+           let xs0 = zipWith Generated (names psc) is
                xs0' = map Var xs0
-               xs1 = zipWith Generated (names sc') is
+               xs1 = zipWith Generated (names psc') is
                xs1' = map Var xs1
            zipWithM_ equalPattern (instantiate psc xs0) (instantiate psc' xs1)
-           equalTerms (instantiate sc xs0') (instantiate sc' xs1')
+           equalTerms (instantiate sc (removeByDummies (names psc) xs0')) (instantiate sc' (removeByDummies (names psc') xs1'))
     
     equalPattern :: Pattern -> Pattern -> TypeChecker ()
     equalPattern (VarPat x) (VarPat x')
@@ -321,12 +323,14 @@ checkPattern (AssertionPat m) t
 
 checkClause :: Clause -> CaseMotive -> TypeChecker ()
 checkClause (Clause psc sc0) motive
-  = do is <- replicateM (length (names sc0)) newName
-       (ctx,ret,delayed) <- checkPatternSeqMotive (instantiate psc (zipWith Generated (names psc) is)) motive
+  = do is <- replicateM (length (names psc)) newName
+       let xs1 = zipWith Generated (names psc) is
+           xs2 = map Var (removeByDummies (names psc) xs1)
+       (ctx,ret,delayed) <- checkPatternSeqMotive (instantiate psc xs1) motive
        forM_ delayed $ \(m,t) -> extendContext ctx (check m t)
        eret <- evaluate ret
        extendContext ctx
-         $ check (instantiate sc0 (zipWith (\x i -> Var (Generated x i)) (names sc0) is)) eret
+         $ check (instantiate sc0 xs2) eret
   where
     checkPatternSeqMotive :: [Pattern] -> CaseMotive -> TypeChecker (Context,Term,[(Term,Term)])
     checkPatternSeqMotive [] (CaseMotiveNil ret)

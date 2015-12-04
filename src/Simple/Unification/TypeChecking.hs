@@ -251,14 +251,16 @@ inferifyClause patTys (Clause psc sc)
        unless (length patTys == lps)
          $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
                      ++ " but found " ++ show (lps)
-       ctx' <- forM (names sc) $ \x -> do
+       ctx' <- forM (names psc) $ \x -> do
                  i <- newName
                  m <- newMetaVar
                  return (i, x, Meta m)
        let is = [ i | (i,_,_) <- ctx' ]
+           xs1 = zipWith Generated (names psc) is
+           xs2 = map Var (removeByDummies (names psc) xs1)
        extendContext ctx' $ do
-         zipWithM_ checkifyPattern (instantiate psc (zipWith Generated (names sc) is)) patTys
-         inferify (instantiate sc (zipWith (\x i -> Var (Generated x i)) (names sc) is))
+         zipWithM_ checkifyPattern (instantiate psc xs1) patTys
+         inferify (instantiate sc xs2)
 
 
 inferifyClauses :: [Type] -> [Clause] -> TypeChecker Type

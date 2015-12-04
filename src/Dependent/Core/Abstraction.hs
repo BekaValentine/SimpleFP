@@ -114,7 +114,7 @@ lamHelper :: String -> Term -> Term
 lamHelper x b = Lam (scope [x] b)
 
 clauseHelper :: [Pattern] -> [String] -> Term -> Clause
-clauseHelper ps xs b = Clause (scope2 xs cleanedXs cleanedPs) (scope xs b)
+clauseHelper ps xs b = Clause (scope2 xs cleanedXs cleanedPs) (scope (filter isVar xs) b)
   where
     cleanedXs = fst (S.runState (mapM cleanXs xs) 0)
     

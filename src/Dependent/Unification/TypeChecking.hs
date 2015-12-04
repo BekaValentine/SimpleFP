@@ -178,11 +178,13 @@ solve eqs0 = go eqs0 []
     goClauses :: [Clause] -> [Clause] -> TypeChecker [Equation]
     goClauses [] [] = return []
     goClauses (Clause psc1 sc1:cs1) (Clause psc2 sc2:cs2)
-      = do is <- replicateM (max (length (names sc1)) (length (names sc2))) newName
-           let xs0 = zipWith Generated (names sc1) is
-               xs0' = map Var xs0
-               xs1 = zipWith Generated (names sc2) is
-               xs1' = map Var xs1
+      = do unless (length (names psc1) == length (names psc2))
+             $ throwError "Patterns bind different numbers of arguments."
+           is <- replicateM (length (names psc1)) newName
+           let xs0 = zipWith Generated (names psc1) is
+               xs0' = map Var (removeByDummies (names psc1) xs0)
+               xs1 = zipWith Generated (names psc2) is
+               xs1' = map Var (removeByDummies (names psc2) xs1)
            reqss <- zipWithM goPattern (instantiate psc1 xs0) (instantiate psc2 xs1)
            reqs' <- goClauses cs1 cs2
            return (Equation (instantiate sc1 xs0') (instantiate sc2 xs1') : concat reqss ++ reqs')
@@ -455,15 +457,17 @@ checkifyPattern (AssertionPat m) t
 
 checkifyClause :: Clause -> CaseMotive -> TypeChecker ()
 checkifyClause (Clause psc sc0) motive
-  = do ctx <- forM (names sc0) $ \x -> do
+  = do ctx <- forM (names psc) $ \x -> do
                 i <- newName
                 m <- newMetaVar
                 return (i, x, Meta m)
        let is = [ i | (i,_,_) <- ctx ]
+           xs1 = zipWith Generated (names psc) is
+           xs2 = map Var (removeByDummies (names psc) xs1)
        extendContext ctx $ do
-         ret <- checkPatternsMotive (instantiate psc (zipWith Generated (names psc) is)) motive
+         ret <- checkPatternsMotive (instantiate psc xs1) motive
          eret <- evaluate ret
-         checkify (instantiate sc0 (zipWith (\x i -> Var (Generated x i)) (names sc0) is)) eret
+         checkify (instantiate sc0 xs2) eret
   where
     checkPatternsMotive :: [Pattern] -> CaseMotive -> TypeChecker Term
     checkPatternsMotive [] (CaseMotiveNil ret)

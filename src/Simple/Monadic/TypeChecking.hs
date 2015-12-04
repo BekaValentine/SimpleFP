@@ -160,10 +160,12 @@ inferClause patTys (Clause psc sc)
        unless (length patTys == lps)
          $ throwError $ "Mismatching number of patterns. Expected " ++ show (length patTys)
                      ++ " but found " ++ show lps
-       is <- replicateM (length (names sc)) newName
-       ctx' <- fmap concat $ zipWithM checkPattern (instantiate psc (zipWith Generated (names sc) is)) patTys
+       is <- replicateM (length (names psc)) newName
+       let xs1 = zipWith Generated (names psc) is
+           xs2 = map Var (removeByDummies (names psc) xs1)
+       ctx' <- fmap concat $ zipWithM checkPattern (instantiate psc xs1) patTys
        extendContext ctx'
-         $ infer (instantiate sc (zipWith (\x i -> Var (Generated x i)) (names sc) is))
+         $ infer (instantiate sc xs2)
 
 inferClauses :: [Type] -> [Clause] -> TypeChecker Type
 inferClauses patTys cs

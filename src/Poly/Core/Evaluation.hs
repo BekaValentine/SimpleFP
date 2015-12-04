@@ -31,7 +31,7 @@ matchClauses [] _
 matchClauses (Clause psc sc:cs) vs
   = case matchTerms (descope Name psc) vs of
       Nothing -> matchClauses cs vs
-      Just xs -> Just (instantiate sc xs)
+      Just xs -> Just (instantiate sc (removeByDummies (names psc) xs))
 
 
 

@@ -20,11 +20,3 @@ instance Abstract i e a => Abstract i e [a] where
 abstractOver :: Abstract i e a => [i] -> a -> [e] -> a
 abstractOver [] m _  = m
 abstractOver xs m vs = runReader (abstract m) (zip xs vs)
-
-abstractOverDummies :: Abstract String e a => [String] -> a -> [e] -> a
-abstractOverDummies ns m vs = runReader (abstract m) (zipDummies ns vs)
-  where
-    zipDummies :: [String] -> [b] -> [(String,b)]
-    zipDummies ("_":xs) (_:ys) = zipDummies xs ys
-    zipDummies (x:xs)  (y:ys) = (x,y) : zipDummies xs ys
-    zipDummies _ _ = []

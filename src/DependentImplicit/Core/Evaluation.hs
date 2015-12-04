@@ -51,7 +51,7 @@ matchClauses [] _ = Nothing
 matchClauses (Clause psc sc:cs) ms
   = case matchPatterns [ (Expl,p) | p <- descope Name psc ] ms of
       Nothing -> matchClauses cs ms
-      Just vs -> Just (instantiate sc vs)
+      Just vs -> Just (instantiate sc (removeByDummies (names psc) vs))
 
 
 

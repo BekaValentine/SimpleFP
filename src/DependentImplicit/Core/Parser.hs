@@ -274,7 +274,6 @@ whereTermDecl = do (x,t) <- try $ do
                      _ <- reserved "where"
                      return (x,t)
                    _ <- optional (reservedOp "|")
-                   --plicsClauses@((_,Clause ps _):_) <- patternMatchClause x `sepBy1` reservedOp "|"
                    preclauses <- patternMatchClause x `sepBy1` reservedOp "|"
                    _ <- reserved "end"
                    case preclauses of
