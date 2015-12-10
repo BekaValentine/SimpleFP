@@ -222,7 +222,7 @@ instance ParenRec Term where
                 ]
       in show c ++ " " ++ intercalate " " as'
   parenRec (Case ms mot cs)
-    = "cases " ++ intercalate " || " (map (parenthesize Nothing) ms)
+    = "case " ++ intercalate " || " (map (parenthesize Nothing) ms)
    ++ " motive " ++ show mot
    ++ " of " ++ intercalate " | " (map auxClause cs) ++ " end"
     where
