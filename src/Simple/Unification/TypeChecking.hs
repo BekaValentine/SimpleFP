@@ -107,8 +107,11 @@ solve eqs0 = go eqs0 []
   where
     go :: [Equation] -> Substitution -> TypeChecker Substitution
     go [] subs' = return subs'
-    go (Equation (Meta x) (Meta y) : eqs) subs' | x == y
-      = go eqs subs'
+    go (Equation (Meta x) (Meta y) : eqs) subs'
+      | x == y
+        = go eqs subs'
+      | otherwise
+        = go eqs ((x,Meta y):subs')
     go (Equation (Meta x) t2 : eqs) subs'
       = do unless (not (occurs x t2))
              $ throwError $ "Cannot unify because " ++ show (Meta x)

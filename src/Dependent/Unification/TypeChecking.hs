@@ -108,6 +108,12 @@ solve eqs0 = go eqs0 []
            return (Equation l' r')
     
     go [] subs' = return subs'
+    go (Equation (Meta x) (Meta y) : eqs) subs'
+      | x == y
+        = go eqs subs'
+      | otherwise
+        = do eqs' <- mapM (evalWithSubs ((x,Meta y):subs')) eqs
+             go eqs' ((x,Meta y):subs')
     go (Equation (Meta x) t2 : eqs) subs'
       = do unless (not (occurs x t2))
              $ throwError $ "Cannot unify because " ++ show (Meta x)
