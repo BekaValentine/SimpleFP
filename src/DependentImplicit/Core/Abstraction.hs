@@ -137,6 +137,8 @@ instance Abstract String Term Pattern where
     = ConPat c <$> mapM abstract ps
   abstract (AssertionPat m)
     = AssertionPat <$> abstract m
+  abstract MakeMeta
+    = return MakeMeta
 
 instance Abstract Int Term Pattern where
   abstract (VarPat x)
@@ -145,6 +147,8 @@ instance Abstract Int Term Pattern where
     = ConPat c <$> mapM abstract ps
   abstract (AssertionPat m)
     = AssertionPat <$> abstract m
+  abstract MakeMeta
+    = return MakeMeta
 
 instance Abstract String Variable Pattern where
   abstract (VarPat (Name x))
@@ -158,6 +162,8 @@ instance Abstract String Variable Pattern where
     = ConPat c <$> mapM abstract ps
   abstract (AssertionPat m)
     = AssertionPat <$> abstract m
+  abstract MakeMeta
+    = return MakeMeta
 
 instance Abstract Int Variable Pattern where
   abstract (VarPat (Name x))
@@ -171,6 +177,8 @@ instance Abstract Int Variable Pattern where
     = ConPat c <$> mapM abstract ps
   abstract (AssertionPat m)
     = AssertionPat <$> abstract m
+  abstract MakeMeta
+    = return MakeMeta
 
 funHelper :: Plicity -> String -> Term -> Term -> Term
 funHelper plic x a b = Fun plic a (scope [x] b)
@@ -200,10 +208,12 @@ clauseHelper ps xs b = Clause (scope2 xs cleanedXs cleanedPs) (scope (filter isV
       = return $ VarPat (Name n)
     cleanPs (VarPat (Generated n i))
       = return $ VarPat (Generated n i)
-    cleanPs (ConPat c ps)
-      = ConPat c <$> mapM (\(plic,p) -> do { p' <- cleanPs p ; return (plic,p') }) ps
+    cleanPs (ConPat c ps')
+      = ConPat c <$> mapM (\(plic,p) -> do { p' <- cleanPs p ; return (plic,p') }) ps'
     cleanPs (AssertionPat m)
       = return $ AssertionPat m
+    cleanPs MakeMeta
+      = return MakeMeta
 
 consMotiveHelper :: String -> Term -> CaseMotive -> CaseMotive
 consMotiveHelper x a b = CaseMotiveCons a (scope [x] b)

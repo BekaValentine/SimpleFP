@@ -345,15 +345,20 @@ whereTermDecl = do (x,t) <- try $ do
                      [(plics,(ps,xs,b))] | all isVar ps
                        -> return $ TermDeclaration x t (helperFold (uncurry lamHelper) (zip plics xs) b)
                      (_,(ps0,_,_)):_
-                       -> do let plicsClauses = [ (plics, clauseHelper ps xs b) | (plics,(ps,xs,b)) <- preclauses ]
-                                 (plics:plicss) = map fst plicsClauses
-                                 clauses = map snd plicsClauses
-                             unless (enoughFunctionArgs plics t)
-                               $ fail $ "Cannot build a case expression motive from the type " ++ show t
+                       -> do let lps0 = length ps0
+                             unless (all (\(_,(ps,_,_)) -> length ps == lps0) preclauses)
+                               $ fail "Mismatching number of patterns in different clauses of a pattern matching function."
+                             let (plics:plicss) = map fst preclauses
                              unless (all (plics==) plicss)
-                               $ fail $ "Mismatching plicities in different clauses of a pattern matching function"
-                             let mot = motiveAux (length plics) t
-                             return $ TermDeclaration x t (lambdaAux (\as -> Case as mot clauses) plics)
+                               $ fail "Mismatching plicities in different clauses of a pattern matching function"
+                             case truePlicities plics t of
+                               Nothing
+                                 -> fail $ "Cannot build a case expression motive from the type " ++ show t
+                               Just truePlics
+                                 -> do let mot = motiveAux (length truePlics) t
+                                           clauses = [ clauseHelper (truePatterns truePlics ps) xs b | (_,(ps,xs,b)) <- preclauses ]
+                                           plicsForLambdaAux = map (either id id) truePlics
+                                       return $ TermDeclaration x t (lambdaAux (\as -> Case as mot clauses) plicsForLambdaAux)
   where
     isVar :: Pattern -> Bool
     isVar (VarPat _) = True
@@ -363,15 +368,31 @@ whereTermDecl = do (x,t) <- try $ do
     lambdaAux f [] = f []
     lambdaAux f (plic:plics) = Lam plic (Scope ["_" ++ show (length plics)] $ \[x] -> lambdaAux (f . (x:)) plics)
     
-    enoughFunctionArgs :: [Plicity] -> Term -> Bool
-    enoughFunctionArgs [] t = True
-    enoughFunctionArgs (Expl:plics) (Fun Expl _ sc) = enoughFunctionArgs plics (descope (Var . Name) sc)
-    enoughFunctionArgs (Impl:plics) (Fun Impl _ sc) = enoughFunctionArgs plics (descope (Var . Name) sc)
-    enoughFunctionArgs _ _ = False
+    truePlicities :: [Plicity] -> Term -> Maybe [Either Plicity Plicity]
+    truePlicities [] _ = Just []
+    truePlicities (Expl:plics) (Fun Expl _ sc)
+      = do rest <- truePlicities plics (descope (Var . Name) sc)
+           return $ Right Expl : rest
+    truePlicities (Expl:plics) (Fun Impl _ sc)
+      = do rest <- truePlicities (Expl : plics) (descope (Var . Name) sc)
+           return $ Left Impl : rest
+    truePlicities (Impl:plics) (Fun Expl _ sc)
+      = Nothing
+    truePlicities (Impl:plics) (Fun Impl _ sc)
+      = do rest <- truePlicities plics (descope (Var . Name) sc)
+           return $ Right Impl : rest
     
     motiveAux :: Int -> Term -> CaseMotive
     motiveAux 0 t = CaseMotiveNil t
     motiveAux n (Fun _ a (Scope ns b)) = CaseMotiveCons a (Scope ns (motiveAux (n-1) . b))
+    
+    truePatterns :: [Either Plicity Plicity] -> [Pattern] -> [Pattern]
+    truePatterns [] [] = []
+    truePatterns (Right _:plics) (p:ps)
+      = p : truePatterns plics ps
+    truePatterns (Left _:plics) ps
+      = MakeMeta : truePatterns plics ps
+
 
 patternMatchClause x = do _ <- symbol x
                           (ps,xs) <- wherePatternSeq

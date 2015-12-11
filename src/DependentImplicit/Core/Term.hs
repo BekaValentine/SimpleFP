@@ -6,7 +6,7 @@
 
 module DependentImplicit.Core.Term where
 
-import Data.List (intercalate)
+import Data.List (intercalate,nub)
 
 import Parens
 import Plicity
@@ -60,6 +60,7 @@ data Pattern
   = VarPat Variable
   | ConPat String [(Plicity,Pattern)]
   | AssertionPat Term
+  | MakeMeta
 
 
 
@@ -88,6 +89,7 @@ instance ParenLoc Pattern where
   parenLoc (VarPat _)       = [ExplConPatArg,ImplConPatArg]
   parenLoc (ConPat _ _)     = [ImplConPatArg]
   parenLoc (AssertionPat _) = [ExplConPatArg,ImplConPatArg]
+  parenLoc MakeMeta         = [ExplConPatArg,ImplConPatArg]
 
 instance ParenRec Pattern where
   parenRec (VarPat x)
@@ -102,6 +104,8 @@ instance ParenRec Pattern where
       auxConPatArg (Impl,p) = "{" ++ parenthesize (Just ImplConPatArg) p ++ "}"
   parenRec (AssertionPat m)
     = "." ++ parenthesize (Just AssertionPatArg) m
+  parenRec MakeMeta
+    = "?makemeta"
 
 instance Show Pattern where
   show p = parenthesize Nothing p
@@ -201,3 +205,39 @@ instance Show CaseMotive where
   show (CaseMotiveCons arg sc)
     = "(" ++ unwords (names sc) ++ " : " ++ show arg ++ ") || "
    ++ show (descope (Var . Name) sc)
+
+
+
+patternVars :: Pattern -> [Variable]
+patternVars (VarPat v) = [v]
+patternVars (ConPat _ ps) = ps >>= (patternVars . snd)
+patternVars (AssertionPat _) = []
+patternVars MakeMeta = []
+
+metas :: Term -> [Int]
+metas x = nub (go x)
+  where
+    go (Meta i) = [i]
+    go (Var _) = []
+    go (Ann m t) = go m ++ go t
+    go Type = []
+    go (Fun _ a sc) = go a ++ go (descope (Var . Name) sc)
+    go (Lam _ sc) = go (descope (Var . Name) sc)
+    go (App _ f x) = go f ++ metas x
+    go (Con _ xs) = concat (map (go . snd) xs)
+    go (Case as mot cs) = concat (map go as) ++ goCaseMotive mot ++ concat (map goClause cs)
+
+    goPat (VarPat _) = []
+    goPat (ConPat _ ps) = concat (map (goPat . snd) ps)
+    goPat (AssertionPat m) = go m
+    goPat MakeMeta = []
+    
+    goCaseMotive (CaseMotiveNil t) = go t
+    goCaseMotive (CaseMotiveCons a sc) = go a ++ goCaseMotive (descope (Var . Name) sc)
+    
+    goClause (Clause psc sc) = concat (map goPat (descope Name psc)) ++ go (descope (Var . Name) sc)
+
+termToPattern :: Term -> Pattern
+termToPattern (Var x) = VarPat x
+termToPattern (Con c xs) = ConPat c [ (plic, termToPattern x) | (plic,x) <- xs ]
+termToPattern m = AssertionPat m

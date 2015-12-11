@@ -7,7 +7,7 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
-import Data.List (nubBy,find)
+import Data.List (nub,nubBy,find)
 
 import Abs
 import Eval
@@ -104,6 +104,7 @@ occurs x (Case as mot cs) = any (occurs x) as || occursCaseMotive mot || any occ
     occursPattern (VarPat _) = False
     occursPattern (ConPat _ xs) = any (occursPattern . snd) xs
     occursPattern (AssertionPat m) = occurs x m
+    occursPattern MakeMeta = False
 
 solve :: [Equation] -> TypeChecker Substitution
 solve eqs0 = go eqs0 []
@@ -115,6 +116,12 @@ solve eqs0 = go eqs0 []
            return (Equation l' r')
     
     go [] subs' = return subs'
+    go (Equation (Meta x) (Meta y) : eqs) subs'
+      | x == y
+        = go eqs subs'
+      | otherwise
+        = do eqs' <- mapM (evalWithSubs ((x,Meta y):subs')) eqs
+             go eqs' ((x,Meta y):subs')
     go (Equation (Meta x) t2 : eqs) subs'
       = do unless (not (occurs x t2))
              $ throwError $ "Cannot unify because " ++ show (Meta x)
@@ -318,6 +325,8 @@ instantiateMetasPat subs (ConPat c ps)
   = ConPat c (map (\(plic,p) -> (plic,instantiateMetasPat subs p)) ps)
 instantiateMetasPat subs (AssertionPat m)
   = AssertionPat (instantiateMetas subs m)
+instantiateMetasPat _ MakeMeta
+  = MakeMeta
 
 
 
@@ -645,6 +654,8 @@ checkifyPattern (AssertionPat m) t
        subs <- substitution
        let m'' = instantiateMetas subs m'
        return (AssertionPat m'', m'')
+checkifyPattern MakeMeta _
+  = throwError $ show MakeMeta ++ " should not appear in a checkable pattern."
 
 
 checkifyClause :: Clause -> CaseMotive -> TypeChecker Clause
@@ -657,15 +668,44 @@ checkifyClause (Clause psc sc0) motive
            xs1 = zipWith Generated (names psc) is
            xs2 = map Var (removeByDummies (names psc) xs1)
        extendContext ctx $ do
-         (ps',ret) <- checkPatternsMotive (instantiate psc xs1) motive
-         eret <- evaluate ret
+         let ps = instantiate psc xs1
+         (ps',ret) <- checkPatternsMotive ps motive
+         subs <- substitution
+         eret <- evaluate (instantiateMetas subs ret)
          m' <- checkify (instantiate sc0 xs2) eret
-         return $ Clause (Scope (names psc) (abstractOver is ps'))
-                         (Scope (names sc0) (abstractOver (removeByDummies (names psc) is) m'))
+         subs' <- substitution
+         let ps'' = map (instantiateMetasPat subs') ps'
+             psWithMsToBind = [ p | (MakeMeta, AssertionPat p) <- zip ps ps'' ]
+             msToBind = nub (psWithMsToBind >>= metas)
+         newSubs <- forM msToBind $ \m -> do
+                   i <- newName
+                   return (m,Var (Generated ("_" ++ show i) i))
+         addSubstitutions newSubs
+         subs'' <- substitution
+         let newPs = bindersByNewMetas ps (map (instantiateMetasPat subs'') ps'')
+             newVars = newPs >>= patternVars
+             (newNames,newIs) = unzip [ (x,i) | Generated x i <- newVars ]
+             newM = instantiateMetas subs'' m'
+         return $ Clause (Scope newNames (abstractOver newIs newPs))
+                         (Scope (removeByDummies newNames newNames) (abstractOver (removeByDummies newNames newIs) newM))
   where
+    bindersByNewMetas :: [Pattern] -> [Pattern] -> [Pattern]
+    bindersByNewMetas [] [] = []
+    bindersByNewMetas (MakeMeta:guides) (AssertionPat x:ps)
+      = termToPattern x : bindersByNewMetas guides ps
+    bindersByNewMetas (_:guides) (p:ps)
+      = p : bindersByNewMetas guides ps
+    
     checkPatternsMotive :: [Pattern] -> CaseMotive -> TypeChecker ([Pattern],Term)
     checkPatternsMotive [] (CaseMotiveNil ret)
       = return ([],ret)
+    checkPatternsMotive (MakeMeta:ps) (CaseMotiveCons _ sc')
+      = do m <- newMetaVar
+           (ps',ret) <-
+             checkPatternsMotive ps (instantiate sc' [Meta m])
+           return ( AssertionPat (Meta m):ps'
+                  , ret
+                  )
     checkPatternsMotive (p:ps) (CaseMotiveCons arg sc')
       = do earg <- evaluate arg
            (p',x) <- checkifyPattern p earg
