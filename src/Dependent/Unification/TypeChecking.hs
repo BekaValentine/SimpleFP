@@ -96,7 +96,11 @@ occurs x (Case as mot cs) = any (occurs x) as || occursCaseMotive mot || any occ
     occursCaseMotive (CaseMotiveCons a sc)
       = occurs x a || occursCaseMotive (descope (Var . Name) sc)
     
-    occursClause (Clause _ sc) = occurs x (descope (Var . Name) sc)
+    occursClause (Clause psc sc) = any occursPattern (descope Name psc) || occurs x (descope (Var . Name) sc)
+    
+    occursPattern (VarPat _) = False
+    occursPattern (ConPat _ xs) = any occursPattern xs
+    occursPattern (AssertionPat m) = occurs x m
 
 solve :: [Equation] -> TypeChecker Substitution
 solve eqs0 = go eqs0 []
