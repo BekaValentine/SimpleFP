@@ -308,8 +308,9 @@ instantiateMetas subs (Case as mot cs)
          (instantiateMetasCaseMotive subs mot)
          (map instantiateClause cs)
   where
-    instantiateClause (Clause ps sc)
-      = Clause ps (instantiateMetas subs <$> sc)
+    instantiateClause (Clause psc sc)
+      = Clause (map (instantiateMetasPat subs) <$> psc)
+               (instantiateMetas subs <$> sc)
 
 instantiateMetasCaseMotive :: Substitution -> CaseMotive -> CaseMotive
 instantiateMetasCaseMotive subs (CaseMotiveNil a)

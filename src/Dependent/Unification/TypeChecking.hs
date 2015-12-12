@@ -270,8 +270,16 @@ instantiateMetas subs (Case as mot cs)
       = CaseMotiveCons (instantiateMetas subs a)
                        (instantiateCaseMotive <$> sc)
     
-    instantiateClause (Clause ps sc)
-      = Clause ps (instantiateMetas subs <$> sc)
+    instantiateClause (Clause psc sc)
+      = Clause (map instantiateMetasPat <$> psc)
+               (instantiateMetas subs <$> sc)
+      
+    instantiateMetasPat (VarPat x)
+      = VarPat x
+    instantiateMetasPat (ConPat c ps)
+      = ConPat c (map instantiateMetasPat ps)
+    instantiateMetasPat (AssertionPat m)
+      = AssertionPat (instantiateMetas subs m)
 
 
 
