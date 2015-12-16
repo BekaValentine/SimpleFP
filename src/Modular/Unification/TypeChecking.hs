@@ -765,6 +765,8 @@ checkifyPattern (VarPat (Generated x i)) t
   = do t' <- typeInContext i
        unify t t'
        return (VarPat (Generated x i), Var (Generated x i))
+checkifyPattern (ConPat _ _) Type
+  = throwError "Cannot pattern match on a type."
 checkifyPattern (ConPat c ps0) t
   = do (unaliasedC,sig) <- typeInSignature c
        (ps',xs,ret) <- checkifyPatConArgs sig ps0 sig

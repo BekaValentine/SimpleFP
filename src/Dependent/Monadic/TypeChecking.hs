@@ -296,6 +296,8 @@ checkPattern (VarPat (Name x)) _
   = return ([], Var (Name x), [])
 checkPattern (VarPat (Generated x i)) t
   = return ([(i,x,t)], Var (Generated x i), [])
+checkPattern (ConPat _ _) Type
+  = throwError "Cannot pattern match on a type."
 checkPattern (ConPat c ps0) t
   = do consig <- typeInSignature c
        (ctx,xs,ret,delayed) <- checkPatConArgs consig ps0 consig
