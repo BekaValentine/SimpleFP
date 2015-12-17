@@ -7,3 +7,8 @@ let plus : Nat -> Nat -> Nat
     | Suc x2 -> Suc (plus x2 y)
     end
 end
+
+let plus' : Nat -> Nat -> Nat where
+  | plus' Zero y = y
+  | plus' (Suc x) y = Suc (plus' x y)
+end

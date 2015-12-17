@@ -6,7 +6,10 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
 
+import Scope
 import TypeChecker (extendDefinitions)
+
+import Simple.Core.Abstraction
 import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Program
@@ -88,6 +91,49 @@ elabTermDecl (TermDeclaration n ty def)
        liftTC (isType ty)
        liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
+elabTermDecl (WhereDeclaration n ty preclauses)
+  = case preclauses of
+      [] -> throwError "Cannot create an empty let-where definition."
+      [(ps,xs,b)] | all isVarPat ps
+        -> elabTermDecl (TermDeclaration n ty (helperFold lamHelper xs b))
+      (ps0,_,_):_
+        -> let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
+           in elabTermDecl (TermDeclaration n ty (lambdaAux (\as -> Case as clauses) (length ps0)))
+   where
+    isVarPat :: Pattern -> Bool
+    isVarPat (VarPat _) = True
+    isVarPat _ = False
+    
+    lambdaAux :: ([Term] -> Term) -> Int -> Term
+    lambdaAux f 0 = f []
+    lambdaAux f i = Lam (Scope ["_" ++ show i] $ \[x] -> lambdaAux (f . (x:)) (i-1))
+
+{-
+whereTermDecl = do (x,t) <- try $ do
+                     _ <- reserved "let"
+                     x <- varName
+                     _ <- reservedOp ":"
+                     t <- datatype
+                     _ <- reserved "where"
+                     return (x,t)
+                   _ <- optional (reservedOp "|")
+                   preclauses <- patternMatchClause x `sepBy1` reservedOp "|"
+                   _ <- reserved "end"
+                   case preclauses of
+                     [(ps,xs,b)] | all isVar ps
+                       -> return $ TermDeclaration x t (helperFold lamHelper xs b)
+                     (ps0,_,_):_
+                       -> let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
+                          in return $ TermDeclaration x t (lambdaAux (\as -> Case as clauses) (length ps0))
+  where
+    isVar :: Pattern -> Bool
+    isVar (VarPat _) = True
+    isVar _ = False
+    
+    lambdaAux :: ([Term] -> Term) -> Int -> Term
+    lambdaAux f 0 = f []
+    lambdaAux f n = Lam (Scope ["_" ++ show n] $ \[x] -> lambdaAux (f . (x:)) (n-1))
+-}
 
 
 

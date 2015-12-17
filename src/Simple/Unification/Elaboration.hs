@@ -6,7 +6,10 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
 
+import Scope
 import TypeChecker (extendDefinitions)
+
+import Simple.Core.Abstraction
 import Simple.Core.Term
 import Simple.Core.Type
 import Simple.Core.Program
@@ -87,6 +90,22 @@ elabTermDecl (TermDeclaration n ty def)
        liftTC (isType ty)
        liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
+elabTermDecl (WhereDeclaration n ty preclauses)
+  = case preclauses of
+      [] -> throwError "Cannot create an empty let-where definition."
+      [(ps,xs,b)] | all isVarPat ps
+        -> elabTermDecl (TermDeclaration n ty (helperFold lamHelper xs b))
+      (ps0,_,_):_
+        -> let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
+           in elabTermDecl (TermDeclaration n ty (lambdaAux (\as -> Case as clauses) (length ps0)))
+   where
+    isVarPat :: Pattern -> Bool
+    isVarPat (VarPat _) = True
+    isVarPat _ = False
+    
+    lambdaAux :: ([Term] -> Term) -> Int -> Term
+    lambdaAux f 0 = f []
+    lambdaAux f i = Lam (Scope ["_" ++ show i] $ \[x] -> lambdaAux (f . (x:)) (i-1))
 
 
 
