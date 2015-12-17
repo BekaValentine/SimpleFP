@@ -13,6 +13,8 @@ import Control.Monad.State
 import Abs
 import Scope
 import TypeChecker (extendDefinitions)
+
+import Poly.Core.Abstraction
 import Poly.Core.Term
 import Poly.Core.Type
 import Poly.Core.Program
@@ -92,25 +94,24 @@ elabTermDecl (TermDeclaration n ty def)
        liftTC (isType ty)
        liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
+elabTermDecl (WhereDeclaration n ty preclauses)
+  = case preclauses of
+      [] -> throwError "Cannot create an empty let-where definition."
+      [(ps,xs,b)] | all isVarPat ps
+        -> elabTermDecl (TermDeclaration n ty (helperFold lamHelper xs b))
+      (ps0,_,_):_
+        -> let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
+           in elabTermDecl (TermDeclaration n ty (lambdaAux (\as -> Case as clauses) (length ps0)))
+   where
+    isVarPat :: Pattern -> Bool
+    isVarPat (VarPat _) = True
+    isVarPat _ = False
+    
+    lambdaAux :: ([Term] -> Term) -> Int -> Term
+    lambdaAux f 0 = f []
+    lambdaAux f i = Lam (Scope ["_" ++ show i] $ \[x] -> lambdaAux (f . (x:)) (i-1))
 
 
-
-instance Abstract String Type Type where
-  abstract (Meta i)
-    = return $ Meta i
-  abstract (TyVar (TyName x))
-    = reader $ \e ->
-        case lookup x e of
-          Nothing -> TyVar (TyName x)
-          Just m  -> m
-  abstract (TyVar (TyGenerated x i))
-    = return $ TyVar (TyGenerated x i)
-  abstract (TyCon c as)
-    = TyCon c <$> mapM abstract as
-  abstract (Fun a b)
-    = Fun <$> abstract a <*> abstract b
-  abstract (Forall sc)
-    = Forall <$> abstractScope sc
 
 forallHelper :: String -> Type -> Type
 forallHelper x b = Forall (scope [x] b)

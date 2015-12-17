@@ -5,14 +5,14 @@
 module Poly.Core.Parser where
 
 import Control.Applicative ((<$>),(*>),(<*),(<*>))
-import Control.Monad.Reader
-import qualified Control.Monad.State as S
+import Control.Monad (guard)
 import Data.List (foldl')
 import Text.Parsec
 import qualified Text.Parsec.Token as Token
 
 import Abs
 import Scope
+import Poly.Core.Abstraction
 import Poly.Core.Term
 import Poly.Core.Type
 import Poly.Core.Program
@@ -20,89 +20,7 @@ import Poly.Core.Program
 
 
 
--- Abstraction
 
-abstractClause :: Clause -> Abstracted String Term Clause
-abstractClause (Clause p sc)
-  = Clause p <$> abstractScope sc
-
-instance Abstract String Term Term where
-  abstract (Var (Name x))
-    = reader $ \e ->
-        case lookup x e of
-          Nothing -> Var (Name x)
-          Just m  -> m
-  abstract (Var (Generated x i))
-    = return $ Var (Generated x i)
-  abstract (Ann m ty)
-    = Ann <$> abstract m <*> return ty
-  abstract (Lam sc)
-    = Lam <$> abstractScope sc
-  abstract (App f a)
-    = App <$> abstract f <*> abstract a
-  abstract (Con c as)
-    = Con c <$> mapM abstract as
-  abstract (Case a cs)
-    = Case <$> mapM abstract a <*> mapM abstractClause cs
-
-instance Abstract String Variable Pattern where
-  abstract (VarPat (Name x))
-    = reader $ \e ->
-        case lookup x e of
-          Nothing -> VarPat (Name x)
-          Just y  -> VarPat y
-  abstract (VarPat (Generated x i))
-    = return $ VarPat (Generated x i)
-  abstract (ConPat c ps)
-    = ConPat c <$> mapM abstract ps
-
-lamHelper :: String -> Term -> Term
-lamHelper x b = Lam (scope [x] b)
-
-clauseHelper :: [Pattern] -> [String] -> Term -> Clause
-clauseHelper ps xs b = Clause (scope2 xs cleanedXs cleanedPs) (scope (filter isVar xs) b)
-  where
-    cleanedXs = fst (S.runState (mapM cleanXs xs) 0)
-    
-    cleanXs :: String -> S.State Int String
-    cleanXs "_" = do i <- S.get
-                     S.put (i+1)
-                     return $ "$" ++ show i
-    cleanXs x = return x
-    
-    cleanedPs = fst (S.runState (mapM cleanPs ps) 0)
-    
-    cleanPs :: Pattern -> S.State Int Pattern
-    cleanPs (VarPat (Name "_"))
-      = do i <- S.get
-           S.put (i+1)
-           return $ VarPat (Name ("$" ++ show i))
-    cleanPs (VarPat (Name n))
-      = return $ VarPat (Name n)
-    cleanPs (VarPat (Generated n i))
-      = return $ VarPat (Generated n i)
-    cleanPs (ConPat c ps)
-      = ConPat c <$> mapM cleanPs ps
-
-instance Abstract String Type Type where
-  abstract (Meta i)
-    = return $ Meta i
-  abstract (TyVar (TyName x))
-    = reader $ \e ->
-        case lookup x e of
-          Nothing -> TyVar (TyName x)
-          Just m  -> m
-  abstract (TyVar (TyGenerated x i))
-    = return $ TyVar (TyGenerated x i)
-  abstract (TyCon c as)
-    = TyCon c <$> mapM abstract as
-  abstract (Fun a b)
-    = Fun <$> abstract a <*> abstract b
-  abstract (Forall sc)
-    = Forall <$> abstractScope sc
-
-forallHelper :: String -> Type -> Type
-forallHelper x b = Forall (scope [x] b)
 
 
 
@@ -295,20 +213,9 @@ whereTermDecl = do (x,t) <- try $ do
                    _ <- optional (reservedOp "|")
                    preclauses <- patternMatchClause x `sepBy1` reservedOp "|"
                    _ <- reserved "end"
-                   case preclauses of
-                     [(ps,xs,b)] | all isVar ps
-                       -> return $ TermDeclaration x t (helperFold lamHelper xs b)
-                     (ps0,_,_):_
-                       -> let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
-                          in return $ TermDeclaration x t (lambdaAux (\as -> Case as clauses) (length ps0))
-  where
-    isVar :: Pattern -> Bool
-    isVar (VarPat _) = True
-    isVar _ = False
-    
-    lambdaAux :: ([Term] -> Term) -> Int -> Term
-    lambdaAux f 0 = f []
-    lambdaAux f n = Lam (Scope ["_" ++ show n] $ \[x] -> lambdaAux (f . (x:)) (n-1))
+                   return $ WhereDeclaration x t preclauses
+
+
 
 patternMatchClause x = do _ <- symbol x
                           psxs <- many patternMatchPattern
