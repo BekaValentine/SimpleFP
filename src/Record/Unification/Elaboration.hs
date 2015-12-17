@@ -6,6 +6,8 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
 
+import Plicity
+import Scope
 import TypeChecker (extendDefinitions)
 import Record.Core.Abstraction
 import Record.Core.ConSig
@@ -123,6 +125,59 @@ elabTermDecl (TermDeclaration n ty def)
        addAlias n
        def' <- liftTC (extendDefinitions [((m,n),def,ty')] (check def ty'))
        addDeclaration n def' ty'
+elabTermDecl (WhereDeclaration n ty preclauses)
+  = case preclauses of
+      [] -> throwError "Cannot create an empty let-where definition."
+      [(plics,(ps,xs,b))] | all isVarPat ps
+        -> elabTermDecl (TermDeclaration n ty (helperFold (uncurry lamHelper) (zip plics xs) b))
+      (_,(ps0,_,_)):_
+        -> do let lps0 = length ps0
+              unless (all (\(_,(ps,_,_)) -> length ps == lps0) preclauses)
+                $ throwError "Mismatching number of patterns in different clauses of a pattern matching function."
+              let (plics:plicss) = map fst preclauses
+              unless (all (plics==) plicss)
+                $ throwError "Mismatching plicities in different clauses of a pattern matching function"
+              case truePlicities plics ty of
+                Nothing
+                  -> throwError $ "Cannot build a case expression motive from the type " ++ show ty
+                Just truePlics
+                  -> do let mot = motiveAux (length truePlics) ty
+                            clauses = [ clauseHelper (truePatterns truePlics ps) xs b | (_,(ps,xs,b)) <- preclauses ]
+                            plicsForLambdaAux = map (either id id) truePlics
+                        elabTermDecl (TermDeclaration n ty (lambdaAux (\as -> Case as mot clauses) plicsForLambdaAux))
+  where
+    isVarPat :: Pattern -> Bool
+    isVarPat (VarPat _) = True
+    isVarPat _ = False
+    
+    lambdaAux :: ([Term] -> Term) -> [Plicity] -> Term
+    lambdaAux f [] = f []
+    lambdaAux f (plic:plics) = Lam plic (Scope ["_" ++ show (length plics)] $ \[x] -> lambdaAux (f . (x:)) plics)
+    
+    truePlicities :: [Plicity] -> Term -> Maybe [Either Plicity Plicity]
+    truePlicities [] _ = Just []
+    truePlicities (Expl:plics) (Fun Expl _ sc)
+      = do rest <- truePlicities plics (descope (Var . Name) sc)
+           return $ Right Expl : rest
+    truePlicities (Expl:plics) (Fun Impl _ sc)
+      = do rest <- truePlicities (Expl : plics) (descope (Var . Name) sc)
+           return $ Left Impl : rest
+    truePlicities (Impl:_) (Fun Expl _ _)
+      = Nothing
+    truePlicities (Impl:plics) (Fun Impl _ sc)
+      = do rest <- truePlicities plics (descope (Var . Name) sc)
+           return $ Right Impl : rest
+    
+    motiveAux :: Int -> Term -> CaseMotive
+    motiveAux 0 t = CaseMotiveNil t
+    motiveAux i (Fun _ a (Scope ns b)) = CaseMotiveCons a (Scope ns (motiveAux (i-1) . b))
+    
+    truePatterns :: [Either Plicity Plicity] -> [Pattern] -> [Pattern]
+    truePatterns [] [] = []
+    truePatterns (Right _:plics) (p:ps)
+      = p : truePatterns plics ps
+    truePatterns (Left _:plics) ps
+      = MakeMeta : truePatterns plics ps
 
 
 

@@ -6,6 +6,7 @@ import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
 
+import Scope
 import TypeChecker (extendDefinitions)
 import Dependent.Core.Abstraction
 import Dependent.Core.ConSig
@@ -85,6 +86,35 @@ elabTermDecl (TermDeclaration n ty def)
        liftTC (check ty Type)
        liftTC (extendDefinitions [(n,def,ty)] (check def ty))
        addDeclaration n def ty
+elabTermDecl (WhereDeclaration n ty preclauses)
+  = case preclauses of
+      [] -> throwError "Cannot create an empty let-where definition."
+      [(ps,xs,b)] | all isVarPat ps
+         -> elabTermDecl (TermDeclaration n ty (helperFold lamHelper xs b))
+      (ps0,_,_):_
+        -> do let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
+                  psLength = length ps0
+                  mot = motiveAux psLength ty
+              unless (psLength <= functionArgsLength ty)
+                $ throwError $ "Cannot build a case expression motive for fewer than " ++ show psLength
+                      ++ " args from the type " ++ show ty
+              elabTermDecl (TermDeclaration n ty (lambdaAux (\as -> Case as mot clauses) psLength))
+  where
+    isVarPat :: Pattern -> Bool
+    isVarPat (VarPat _) = True
+    isVarPat _ = False
+    
+    lambdaAux :: ([Term] -> Term) -> Int -> Term
+    lambdaAux f 0 = f []
+    lambdaAux f i = Lam (Scope ["_" ++ show i] $ \[x] -> lambdaAux (f . (x:)) (i-1))
+    
+    functionArgsLength :: Term -> Int
+    functionArgsLength (Fun _ sc) = 1 + functionArgsLength (descope (Var . Name) sc)
+    functionArgsLength _          = 0
+    
+    motiveAux :: Int -> Term -> CaseMotive
+    motiveAux 0 t = CaseMotiveNil t
+    motiveAux i (Fun a (Scope ns b)) = CaseMotiveCons a (Scope ns (motiveAux (i-1) . b))
 
 
 

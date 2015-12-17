@@ -222,33 +222,9 @@ whereTermDecl = do (x,t) <- try $ do
                    _ <- optional (reservedOp "|")
                    preclauses <- patternMatchClause x `sepBy1` reservedOp "|"
                    _ <- reserved "end"
-                   case preclauses of
-                     [(ps,xs,b)] | all isVar ps
-                       -> return $ TermDeclaration x t (helperFold lamHelper xs b)
-                     (ps0,_,_):_
-                       -> do let clauses = [ clauseHelper ps xs b | (ps,xs,b) <- preclauses ]
-                                 psLength = length ps0
-                                 mot = motiveAux psLength t
-                             unless (psLength <= functionArgsLength t)
-                               $ fail $ "Cannot build a case expression motive for fewer than " ++ show psLength
-                                     ++ " args from the type " ++ show t
-                             return $ TermDeclaration x t (lambdaAux (\as -> Case as mot clauses) psLength)
-  where
-    isVar :: Pattern -> Bool
-    isVar (VarPat _) = True
-    isVar _ = False
-    
-    lambdaAux :: ([Term] -> Term) -> Int -> Term
-    lambdaAux f 0 = f []
-    lambdaAux f n = Lam (Scope ["_" ++ show n] $ \[x] -> lambdaAux (f . (x:)) (n-1))
-    
-    functionArgsLength :: Term -> Int
-    functionArgsLength (Fun _ sc) = 1 + functionArgsLength (descope (Var . Name) sc)
-    functionArgsLength _          = 0
-    
-    motiveAux :: Int -> Term -> CaseMotive
-    motiveAux 0 t = CaseMotiveNil t
-    motiveAux n (Fun a (Scope ns b)) = CaseMotiveCons a (Scope ns (motiveAux (n-1) . b))
+                   return $ WhereDeclaration x t preclauses
+
+
 
 patternMatchClause x = do _ <- symbol x
                           (ps,xs) <- wherePatternSeq

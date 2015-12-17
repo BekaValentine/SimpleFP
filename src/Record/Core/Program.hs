@@ -4,6 +4,8 @@ module Record.Core.Program where
 
 import Data.List (intercalate)
 
+import Parens
+import Plicity
 import Record.Core.ConSig
 import Record.Core.Term
 
@@ -13,10 +15,22 @@ import Record.Core.Term
 
 data TermDeclaration
   = TermDeclaration String Term Term
+  | WhereDeclaration String Term [([Plicity],([Pattern],[String],Term))]
 
 instance Show TermDeclaration where
   show (TermDeclaration n ty def)
     = "let " ++ n ++ " : " ++ show ty ++ " = " ++ show def ++ " end"
+  show (WhereDeclaration n ty preclauses)
+    = "let " ++ n ++ " : " ++ show ty ++ " where "
+        ++ intercalate " | " (map showPreclause preclauses)
+    where
+      showPreclause :: ([Plicity],([Pattern],[String],Term)) -> String
+      showPreclause (plics,(ps,_,b))
+        = intercalate " || " (map showPattern (zip plics ps)) ++ " -> " ++ show b
+      
+      showPattern :: (Plicity,Pattern) -> String
+      showPattern (Expl,p) = parenthesize (Just ExplConPatArg) p
+      showPattern (Impl,p) = parenthesize (Just ImplConPatArg) p
 
 
 

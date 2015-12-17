@@ -385,6 +385,19 @@ whereTermDecl = do (x,t) <- try $ do
                      _ <- reserved "where"
                      return (x,t)
                    _ <- optional (reservedOp "|")
+                   preclauses <- patternMatchClause x `sepBy1` reservedOp "|"
+                   _ <- reserved "end"
+                   return $ WhereDeclaration x t preclauses
+
+{-
+whereTermDecl = do (x,t) <- try $ do
+                     _ <- reserved "let"
+                     x <- varName
+                     _ <- reservedOp ":"
+                     t <- term
+                     _ <- reserved "where"
+                     return (x,t)
+                   _ <- optional (reservedOp "|")
                    --plicsClauses@((_,Clause ps _):_) <- patternMatchClause x `sepBy1` reservedOp "|"
                    preclauses <- patternMatchClause x `sepBy1` reservedOp "|"
                    _ <- reserved "end"
@@ -439,6 +452,7 @@ whereTermDecl = do (x,t) <- try $ do
       = p : truePatterns plics ps
     truePatterns (Left _:plics) ps
       = MakeMeta : truePatterns plics ps
+-}
 
 
 patternMatchClause x = do _ <- symbol x
