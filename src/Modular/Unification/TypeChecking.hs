@@ -372,22 +372,21 @@ unalias (Right (m,n))
 
 typeInSignature :: Constructor -> TypeChecker (Constructor, ConSig Term)
 typeInSignature (BareCon n0)
-  = do (m,n) <- unalias (Left n0)
-       typeInSignature (DottedCon m n)
+  = do consigs <- signature
+       (m,n) <- unalias (Left n0)
+       case lookup (m,n) consigs of
+         Nothing -> throwError $ "Unknown constructor: " ++ show (DottedCon m n)
+         Just t  -> return (DottedCon m n, t)
 typeInSignature (DottedCon m n)
   = do consigs <- signature
-       (m',n') <- catchError
-                    (unalias (Right (m,n)))
-                    (\_ -> return (m,n))
+       (m',n') <- unalias (Right (m,n))
        case lookup (m',n') consigs of
          Nothing -> throwError $ "Unknown constructor: " ++ show (DottedCon m' n')
          Just t  -> return (DottedCon m' n', t)
 
 dottedTypeInDefinitions :: String -> String -> TypeChecker ((String,String),Term)
 dottedTypeInDefinitions m x
-  = do (m',x') <- catchError
-                    (unalias (Right (m,x)))
-                    (\_ -> return (m,x))
+  = do (m',x') <- unalias (Right (m,x))
        defs <- definitions
        case find (\(mx,_,_) -> mx == (m',x')) defs of
          Nothing      -> throwError $ "Unknown constant/defined term: " ++ m' ++ "." ++ x'
@@ -396,7 +395,10 @@ dottedTypeInDefinitions m x
 typeInDefinitions :: String -> TypeChecker ((String,String),Term)
 typeInDefinitions x0
   = do (m,x) <- unalias (Left x0)
-       dottedTypeInDefinitions m x
+       defs <- definitions
+       case find (\(mx,_,_) -> mx == (m,x)) defs of
+         Nothing      -> throwError $ "Unknown constant/defined term: " ++ m ++ "." ++ x
+         Just (_,_,t) -> return ((m,x),t)
 
 typeInContext :: Int -> TypeChecker Term
 typeInContext i

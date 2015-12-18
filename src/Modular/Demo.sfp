@@ -15,20 +15,11 @@ module Nat where
       end
   end
   
-end
-
-
-module Vec1 where
-  
-  data Vec (a : Type) (n : Nat.Nat) where
-  | Nil {a : Type} : Vec a Nat.Zero
-  | Cons {a : Type} {n : Nat.Nat} (x : a) (xs : Vec a n) : Vec a (Nat.Suc n)
-  end
   
 end
 
 
-module Vec2 opening Nat where
+module Vec1 opening Nat where
   
   data Vec (a : Type) (n : Nat) where
   | Nil {a : Type} : Vec a Zero
@@ -38,7 +29,7 @@ module Vec2 opening Nat where
 end
 
 
-module Vec3 opening Nat as N where
+module Vec2 opening Nat as N where
   
   data Vec (a : Type) (n : N.Nat) where
   | Nil {a : Type} : Vec a N.Zero
@@ -48,7 +39,7 @@ module Vec3 opening Nat as N where
 end
 
 
-module Vec4
+module Vec3
 opening
 | Nat renaming (Zero to Z, Suc to S)
 where
