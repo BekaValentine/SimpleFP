@@ -61,8 +61,6 @@ instance Abstract String Term Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
   abstract (RecordType tele)
     = RecordType <$> abstract tele
   abstract (RecordCon fields)
@@ -96,8 +94,6 @@ instance Abstract Int Term Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
   abstract (RecordType tele)
     = RecordType <$> abstract tele
   abstract (RecordCon fields)
@@ -131,8 +127,6 @@ instance Abstract String Variable Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
   abstract (RecordType tele)
     = RecordType <$> abstract tele
   abstract (RecordCon fields)
@@ -166,8 +160,6 @@ instance Abstract Int Variable Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
   abstract (RecordType tele)
     = RecordType <$> abstract tele
   abstract (RecordCon fields)

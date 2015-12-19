@@ -93,8 +93,6 @@ instance Eval (Environment (String,String) Term) Term where
          case matchClauses cs [ (Expl,em) | em <- ems ] of
            Nothing -> return (Case ms mot cs)
            Just b  -> eval b
-  eval (OpenIn _ m)
-    = eval m
   eval (RecordType tele)
     = return $ RecordType tele
   eval (RecordCon fields)

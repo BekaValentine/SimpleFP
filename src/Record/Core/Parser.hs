@@ -277,14 +277,6 @@ caseExp = do _ <- reserved "case"
              _ <- reserved "end"
              return $ Case ms mot cs
 
-openExp = do _ <- reserved "open"
-             _ <- optional (reserved "|")
-             settings <- sepBy openSettings (reserved "|")
-             _ <- reserved "in"
-             m <- term
-             _ <- reserved "end"
-             return (OpenIn settings m)
-
 recordType = do _ <- reserved "Rec"
                 xts <- braces $ fieldDecl `sepBy` reservedOp ","
                 return $ RecordType (telescopeHelper xts)
@@ -322,11 +314,11 @@ annLeft = application <|> dottedThings <|> parenTerm <|> conData <|> variable <|
 
 annRight = application <|> dottedThings <|> funType <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> recordType <|> recordCon
 
-funArg = application <|> dottedThings <|> parenTerm <|> conData <|> caseExp <|> variable <|> typeType <|> openExp <|> recordType <|> recordCon
+funArg = application <|> dottedThings <|> parenTerm <|> conData <|> caseExp <|> variable <|> typeType <|> recordType <|> recordCon
 
-funRet = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> openExp <|> recordType <|> recordCon
+funRet = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> recordType <|> recordCon
 
-lamBody = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> openExp <|> recordType <|> recordCon
+lamBody = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> recordType <|> recordCon
 
 appFun = dottedThings <|> parenTerm <|> variable <|> typeType <|> recordType <|> recordCon
 
@@ -335,7 +327,7 @@ rawExplAppArg = dottedThings <|> parenTerm <|> noArgConData <|> variable <|> typ
 explAppArg = do m <- rawExplAppArg
                 return (Expl,m)
 
-rawImplAppArg = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> openExp <|> recordType <|> recordCon
+rawImplAppArg = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> recordType <|> recordCon
 
 implAppArg = do m <- braces $ rawImplAppArg
                 return (Impl,m)
@@ -347,7 +339,7 @@ rawExplConArg = dottedThings <|> parenTerm <|> noArgConData <|> variable <|> typ
 explConArg = do m <- rawExplConArg
                 return (Expl,m)
 
-rawImplConArg = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> openExp <|> recordType <|> recordCon
+rawImplConArg = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> recordType <|> recordCon
 
 implConArg = do m <- braces $ rawImplConArg
                 return (Impl,m)
@@ -356,7 +348,7 @@ conArg = explConArg <|> implConArg
 
 caseArg = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> variable <|> typeType <|> recordType <|> recordCon
 
-term = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> openExp <|> recordType <|> recordCon
+term = annotation <|> funType <|> application <|> dottedThings <|> parenTerm <|> lambda <|> conData <|> caseExp <|> variable <|> typeType <|> recordType <|> recordCon
 
 parseTerm str = case parse (spaces *> term <* eof) "(unknown)" str of
                   Left e -> Left (show e)

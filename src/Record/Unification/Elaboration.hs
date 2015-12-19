@@ -5,6 +5,7 @@ module Record.Unification.Elaboration where
 import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
+import Data.List (nub,(\\),intersect,sort,groupBy)
 
 import Plicity
 import Scope
@@ -87,6 +88,116 @@ addModuleName m
        unless (not (m `elem` ms))
          $ throwError $ "A module is already declared with the name " ++ m
        putModuleNames (m:ms)
+
+ensureOpenSettingsAreValid :: [OpenSettings] -> Elaborator ()
+ensureOpenSettingsAreValid oss
+  = forM_ oss $ \(OpenSettings m a hu r) -> do
+      ensureModuleExists m
+      openAsIsValid a
+      hidingUsingIsValid m hu
+      renamingIsValid m a hu r
+       
+  where
+    ensureModuleExists :: String -> Elaborator ()
+    ensureModuleExists m
+      = do ms <- moduleNames
+           unless (m `elem` ms)
+             $ throwError $ "The module " ++ m ++ " is not a known module."
+    
+    openAsIsValid :: Maybe String -> Elaborator ()
+    openAsIsValid Nothing = return ()
+    openAsIsValid (Just m')
+      = do ms <- moduleNames
+           unless (not (m' `elem` ms))
+             $ throwError $ "The module name " ++ m' ++ " is already in use."
+    
+    hidingUsingIsValid :: String -> Maybe HidingUsing -> Elaborator ()
+    hidingUsingIsValid _ Nothing = return ()
+    hidingUsingIsValid m (Just hu')
+      = do defs <- definitions
+           sig <- signature
+           let ns = nub (case hu' of { Hiding ns' -> ns' ; Using ns' -> ns' })
+               known = nub ([ n | ((_,n),_,_) <- defs ] ++ [ n | ((_,n),_) <- sig ])
+               missing = ns \\ known
+           unless (null missing)
+             $ throwError $ "The module " ++ m ++ " does not declare these symbols: "
+                         ++ unwords missing
+    
+    renamingIsValid :: String -> Maybe String -> Maybe HidingUsing -> [(String,String)] -> Elaborator ()
+    renamingIsValid m a hu r
+      = do defs <- definitions
+           sig <- signature
+           let ns = nub [ n | (n,_) <- r ]
+               known = nub ([ n | ((m',n),_,_) <- defs, m' == m ] ++ [ n | ((m',n),_) <- sig, m' == m ])
+               missing = ns \\ known
+           unless (null missing)
+             $ throwError $ "The module " ++ m ++ " does not declare these symbols: "
+                         ++ unwords ns
+           let knownBeingUsed = case hu of
+                                  Nothing -> known
+                                  Just (Using used) -> used
+                                  Just (Hiding hidden) -> known \\ hidden
+               missingUsed = ns \\ knownBeingUsed
+           unless (null missingUsed)
+             $ throwError $ "The following symbols are not being opened: " ++ unwords missingUsed
+           let ns' = [ n' | (_,n') <- r ]
+               preserved = known \\ ns
+               overlappingNames = [ x | x:xs <- groupBy (==) (sort (ns' ++ preserved)), length xs /= 0 ]
+           unless (null overlappingNames)
+             $ throwError $ "These symbols will be overlapping when the module " ++ m
+                         ++ " is opened: " ++ unwords overlappingNames
+           als <- aliases
+           let combine = case a of
+                           Nothing -> Left
+                           Just m' -> \n' -> Right (m',n')
+               mns' = nub [ combine n' | (_,n') <- r ]
+               knownAls = nub [ al | (al,_) <- als ]
+               overlap = intersect mns' knownAls
+               showLR (Left n0) = n0
+               showLR (Right (m0,n0)) = m0 ++ "." ++ n0
+           unless (null overlap)
+             $ throwError $ "These symbols are already in scope: "
+                         ++ unwords (map showLR overlap)
+           
+extendAliases :: [OpenSettings] -> Elaborator a -> Elaborator a
+extendAliases settings tc
+  = do ensureOpenSettingsAreValid settings
+       als <- aliases
+       sig <- signature
+       defs <- definitions
+       let newAls = newAliases sig defs settings ++ als
+       putAliases newAls
+       x <- tc
+       putAliases als
+       return x
+
+newAliases :: Signature Term -> Definitions -> [OpenSettings] -> ModuleAliases
+newAliases _ _ [] = []
+newAliases sig defs (os:oss)
+  = let als  = newAliasesFromSettings os
+        als' = newAliases sig defs oss
+    in als' ++ als
+  where    
+    newAliasesFromSettings :: OpenSettings -> ModuleAliases
+    newAliasesFromSettings (OpenSettings m a hu r)
+      = let openedSymbols = [ (m',c) | ((m',c),_) <- sig, m' == m ]
+                         ++ [ (m',x) | ((m',x),_,_) <- defs, m' == m ]
+            usedSymbols = used hu openedSymbols
+            renamedSymbols = renamed r usedSymbols
+            asedSymbols = ased a renamedSymbols
+        in asedSymbols
+    
+    used :: Maybe HidingUsing -> [(String,String)] -> [(String,String)]
+    used Nothing            = id
+    used (Just (Hiding ns)) = filter (\(_,n) -> not (n `elem` ns))
+    used (Just (Using ns))  = filter (\(_,n) -> (n `elem` ns))
+    
+    renamed :: [(String,String)] -> [(String,String)] -> [(String,(String,String))]
+    renamed r mns = [ (maybe n id (lookup n r), (m,n)) | (m,n) <- mns ]
+    
+    ased :: Maybe String -> [(String,(String,String))] -> [(Either String (String,String), (String,String))]
+    ased Nothing   ns = [ (Left x, (m,n)) | (x,(m,n)) <- ns ]
+    ased (Just m') ns = [ (Right (m',x), (m,n)) | (x,(m,n)) <- ns ]
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
 when' tc e = do ElabState sig defs ctx i als _ ms <- get
@@ -203,7 +314,7 @@ elabModule :: Module -> Elaborator ()
 elabModule (Module m settings stmts0)
   = do addModuleName m
        putModuleName m
-       liftTC (ensureOpenSettingsAreValid settings)
+       ensureOpenSettingsAreValid settings
        als <- aliases
        sig <- signature
        defs <- definitions
