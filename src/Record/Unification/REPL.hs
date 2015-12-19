@@ -46,7 +46,7 @@ repl src = case loadProgram src of
     loadTerm :: Signature Term -> Definitions -> Context -> Int -> Environment (String,String) Term -> [String] -> String -> Either String Term
     loadTerm sig defs ctx i env ms src
       = do tm <- parseTerm src
-           case runTypeChecker (infer tm) sig defs ctx i [] ms of
+           case runTypeChecker (infer tm) sig defs ctx i ([ (Right p,p) | (p,_) <- sig ] ++ [ (Right p,p) | (p,_,_) <- defs ]) ms of
              Left e  -> Left e
              Right ((tm',_),_) -> runReaderT (eval tm') env
     

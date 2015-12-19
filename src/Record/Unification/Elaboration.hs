@@ -68,7 +68,7 @@ putAliases als = do s <- get
 addAlias :: String -> Elaborator ()
 addAlias n = do als <- aliases
                 m <- moduleName
-                putAliases ((Left n,(m,n)):als)
+                putAliases ((Left n,(m,n)):(Right (m,n),(m,n)):als)
 
 putModuleName :: String -> Elaborator ()
 putModuleName m = do s <- get
