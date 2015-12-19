@@ -25,33 +25,6 @@ instance Show DeclArg where
   show (DeclArg Expl x t) = "(" ++ x ++ " : " ++ show t ++ ")"
   show (DeclArg Impl x t) = "{" ++ x ++ " : " ++ show t ++ "}"
 
-data HidingUsing
-  = Hiding [String]
-  | Using [String]
-
-data OpenSettings
-  = OpenSettings
-    { openModule :: String
-    , openAs :: Maybe String
-    , openHidingUsing :: Maybe HidingUsing
-    , openRenaming :: [(String,String)]
-    }
-
-instance Show OpenSettings where
-  show (OpenSettings m a hu r)
-    = m ++ a' ++ hu' ++ r'
-    where
-      a' = case a of
-             Nothing -> ""
-             Just m' -> " as " ++ m'
-      hu' = case hu of
-              Nothing -> ""
-              Just (Hiding ns) -> " hiding (" ++ intercalate "," ns ++ ")"
-              Just (Using ns)  -> " using (" ++ intercalate "," ns ++ ")"
-      r' = case r of
-             [] -> ""
-             _ -> " renaming (" ++ intercalate ", " [ n ++ " to " ++ n' | (n,n') <- r ] ++ ")"
-
 
 
 
@@ -86,7 +59,6 @@ data Term
   | App Plicity Term Term
   | Con Constructor [(Plicity, Term)]
   | Case [Term] CaseMotive [Clause]
-  | OpenIn [OpenSettings] Term
 
 data CaseMotive
   = CaseMotiveNil Term
@@ -181,8 +153,6 @@ instance ParenLoc Term where
     = [FunArg,FunRet,AnnLeft,LamBody,ImplAppRight,ImplConArg]
   parenLoc (Case _ _ _)
     = [FunArg,FunRet,LamBody,ImplAppRight,ImplConArg]
-  parenLoc (OpenIn _ _)
-    = [FunArg,FunRet,LamBody,ImplAppRight,ImplConArg]
 
 instance ParenRec Term where
   parenRec (Meta i)
@@ -234,8 +204,6 @@ instance ParenRec Term where
         = intercalate " || " (map show (descope Name psc))
           ++ " -> " ++ parenthesize Nothing
                          (descope (Var . Name) sc)
-  parenRec (OpenIn settings m)
-    = "open " ++ intercalate " | " (map show settings) ++ " in " ++ parenthesize Nothing m ++ " end"
       
 
 
@@ -271,7 +239,6 @@ metas x = nub (go x)
     go (App _ f x) = go f ++ metas x
     go (Con _ xs) = concat (map (go . snd) xs)
     go (Case as mot cs) = concat (map go as) ++ goCaseMotive mot ++ concat (map goClause cs)
-    go (OpenIn _ m) = go m
 
     goPat (VarPat _) = []
     goPat (ConPat _ ps) = concat (map (goPat . snd) ps)

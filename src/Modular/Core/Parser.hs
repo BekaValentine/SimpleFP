@@ -261,25 +261,17 @@ caseExp = do _ <- reserved "case"
              _ <- reserved "end"
              return $ Case ms mot cs
 
-openExp = do _ <- reserved "open"
-             _ <- optional (reserved "|")
-             settings <- sepBy openSettings (reserved "|")
-             _ <- reserved "in"
-             m <- term
-             _ <- reserved "end"
-             return (OpenIn settings m)
-
 parenTerm = parens term
 
 annLeft = application <|> parenTerm <|> dottedVar <|> conData <|> variable <|> typeType
 
 annRight = funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
-funArg = application <|> parenTerm <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
+funArg = application <|> parenTerm <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
-funRet = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
+funRet = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
-lamBody = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
+lamBody = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
 appFun = parenTerm <|> variable <|> dottedVar <|> typeType
 
@@ -288,7 +280,7 @@ rawExplAppArg = parenTerm <|> dottedVar <|> noArgConData <|> variable <|> typeTy
 explAppArg = do m <- rawExplAppArg
                 return (Expl,m)
 
-rawImplAppArg = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
+rawImplAppArg = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
 implAppArg = do m <- braces $ rawImplAppArg
                 return (Impl,m)
@@ -300,7 +292,7 @@ rawExplConArg = parenTerm <|> dottedVar <|> noArgConData <|> variable <|> typeTy
 explConArg = do m <- rawExplConArg
                 return (Expl,m)
 
-rawImplConArg = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
+rawImplConArg = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
 implConArg = do m <- braces $ rawImplConArg
                 return (Impl,m)
@@ -309,7 +301,7 @@ conArg = explConArg <|> implConArg
 
 caseArg = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> variable <|> typeType
 
-term = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType <|> openExp
+term = annotation <|> funType <|> application <|> parenTerm <|> lambda <|> dottedVar <|> conData <|> caseExp <|> variable <|> typeType
 
 parseTerm str = case parse (spaces *> term <* eof) "(unknown)" str of
                   Left e -> Left (show e)

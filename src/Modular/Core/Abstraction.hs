@@ -56,8 +56,6 @@ instance Abstract String Term Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
 
 instance Abstract Int Term Term where
   abstract (Meta i)
@@ -85,8 +83,6 @@ instance Abstract Int Term Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
 
 instance Abstract String Variable Term where
   abstract (Meta i)
@@ -114,8 +110,6 @@ instance Abstract String Variable Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
 
 instance Abstract Int Variable Term where
   abstract (Meta i)
@@ -143,8 +137,6 @@ instance Abstract Int Variable Term where
     = Con c <$> forM as (\(plic,a) -> do a' <- abstract a ; return (plic,a'))
   abstract (Case as t cs)
     = Case <$> mapM abstract as <*> abstract t <*> mapM abstract cs
-  abstract (OpenIn settings m)
-    = OpenIn settings <$> abstract m
 
 instance Abstract String Term Pattern where
   abstract (VarPat x)

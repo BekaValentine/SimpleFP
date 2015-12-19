@@ -60,6 +60,33 @@ instance Show Statement where
   show (TmDecl td) = show td
 
 
+data HidingUsing
+  = Hiding [String]
+  | Using [String]
+
+data OpenSettings
+  = OpenSettings
+    { openModule :: String
+    , openAs :: Maybe String
+    , openHidingUsing :: Maybe HidingUsing
+    , openRenaming :: [(String,String)]
+    }
+
+instance Show OpenSettings where
+  show (OpenSettings m a hu r)
+    = m ++ a' ++ hu' ++ r'
+    where
+      a' = case a of
+             Nothing -> ""
+             Just m' -> " as " ++ m'
+      hu' = case hu of
+              Nothing -> ""
+              Just (Hiding ns) -> " hiding (" ++ intercalate "," ns ++ ")"
+              Just (Using ns)  -> " using (" ++ intercalate "," ns ++ ")"
+      r' = case r of
+             [] -> ""
+             _ -> " renaming (" ++ intercalate ", " [ n ++ " to " ++ n' | (n,n') <- r ] ++ ")"
+
 data Module
   = Module String [OpenSettings] [Statement]
 

@@ -65,22 +65,3 @@ module VecAppend1 opening Vec1 | Nat where
   end
   
 end
-
-module VecAppend2 where
-  
-  let append : open Vec1 | Nat
-               in {a : Type} -> {m : Nat} -> {n : Nat}
-                   -> (xs : Vec a m) -> (ys : Vec a n) -> Vec a (plus m n)
-               end
-    = \{a} -> \{m} -> \{n} -> \xs -> \ys ->
-      open Vec1 | Nat in
-        case m || xs
-        motive (m' : Nat) || (xs' : Vec a m') || Vec a (plus m' n)
-        of
-        | Zero || Nil -> ys
-        | Suc m' || Cons x xs' -> Cons x (append xs' ys)
-        end
-      end
-  end
-  
-end
