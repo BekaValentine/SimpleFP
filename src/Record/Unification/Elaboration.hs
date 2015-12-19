@@ -5,7 +5,7 @@ module Record.Unification.Elaboration where
 import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
-import Data.List (nub,(\\),intersect,sort,groupBy)
+import Data.List (nub,(\\),intersect,sort,groupBy,partition)
 
 import Plicity
 import Scope
@@ -330,6 +330,27 @@ elabModule (Module m settings stmts0)
     go (TmDecl td:stmts) = do elabTermDecl td
                               go stmts
 
+sortModules :: [Module] -> Elaborator [Module]
+sortModules mods = go [] mods
+  where
+    splitModules :: [String] -> [Module] -> Elaborator ([Module], [Module])
+    splitModules prev mods
+      = let (next,rest) = partition (\(Module _ settings _) -> all (\s -> openModule s `elem` prev) settings) mods
+        in if null next
+           then throwError $ "The following modules have circular dependencies which prevent resolution: "
+                          ++ unwords [ n | Module n _ _ <- rest ]
+           else return (next,rest)
+    
+    go :: [String] -> [Module] -> Elaborator [Module]
+    go _ []
+      = return []
+    go prev mods
+      = do (next,rest) <- splitModules prev mods
+           let newPrev = [ n | Module n _ _ <- next ]
+           rest' <- go (newPrev ++ prev) rest
+           return (next ++ rest')
 
 elabProgram :: Program -> Elaborator ()
-elabProgram (Program mods) = mapM_ elabModule mods
+elabProgram (Program mods)
+  = do sortedMods <- sortModules mods
+       mapM_ elabModule sortedMods
