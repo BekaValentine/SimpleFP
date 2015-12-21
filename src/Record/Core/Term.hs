@@ -270,6 +270,9 @@ metas x = nub (go x)
     go (App _ f x) = go f ++ metas x
     go (Con _ xs) = concat (map (go . snd) xs)
     go (Case as mot cs) = concat (map go as) ++ goCaseMotive mot ++ concat (map goClause cs)
+    go (RecordType tele) = goTele tele
+    go (RecordCon fields) = concat (map (go . snd) fields)
+    go (RecordDot m _) = go m
 
     goPat (VarPat _) = []
     goPat (ConPat _ ps) = concat (map (goPat . snd) ps)
@@ -280,6 +283,9 @@ metas x = nub (go x)
     goCaseMotive (CaseMotiveCons a sc) = go a ++ goCaseMotive (descope (Var . Name) sc)
     
     goClause (Clause psc sc) = concat (map goPat (descope Name psc)) ++ go (descope (Var . Name) sc)
+    
+    goTele TelescopeNil = []
+    goTele (TelescopeCons m sc) = go m ++ goTele (descope (Var . Name) sc)
 
 termToPattern :: Term -> Pattern
 termToPattern (Var x) = VarPat x
