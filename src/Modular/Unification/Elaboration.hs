@@ -293,13 +293,25 @@ elabTermDecl (WhereDeclaration n ty preclauses)
 
 
 
-elabAlt :: String -> ConSig Term -> Elaborator ()
-elabAlt c consig
-  = do when' (typeInSignature (BareCon c))
+elabAlt :: String -> String -> ConSig Term -> Elaborator ()
+elabAlt tycon c consig
+  = do validConSig consig
+       when' (typeInSignature (BareCon c))
            $ throwError ("Constructor already declared: " ++ c)
        addAlias c
        consig' <- liftTC (checkifyConSig consig)
        addConstructor c consig'
+  where
+    validConSig :: ConSig Term -> Elaborator ()
+    validConSig (ConSigNil (Con (BareCon tc) _))
+      = unless (tc == tycon)
+          $ throwError $ "The constructor " ++ c ++ " should constructor a value of the type " ++ tycon
+                      ++ " but instead produces a " ++ tc
+    validConSig (ConSigNil a)
+      = throwError $ "The constructor " ++ c ++ " should constructor a value of the type " ++ tycon
+                  ++ " but instead produces " ++ show a
+    validConSig (ConSigCons _ _ sc)
+      = validConSig (descope (Var . Name) sc)
 
 elabTypeDecl :: TypeDeclaration -> Elaborator ()
 elabTypeDecl (TypeDeclaration tycon tyconargs alts)
@@ -309,7 +321,7 @@ elabTypeDecl (TypeDeclaration tycon tyconargs alts)
        addAlias tycon
        tyconSig' <- liftTC (checkifyConSig tyconSig)
        addConstructor tycon tyconSig'
-       mapM_ (uncurry elabAlt) alts
+       mapM_ (uncurry (elabAlt tycon)) alts
 
 elabModule :: Module -> Elaborator ()
 elabModule (Module m settings stmts0)
