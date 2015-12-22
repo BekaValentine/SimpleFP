@@ -1,0 +1,19 @@
+module Demo where
+  
+  data family Nat end
+  
+  data instance Nat where
+  | Zero : Nat
+  end
+  
+end
+
+module Demo2
+opening Demo
+where
+  
+  data instance Nat where
+  | Suc (n : Nat) : Nat
+  end
+  
+end
