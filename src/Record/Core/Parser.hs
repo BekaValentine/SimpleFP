@@ -431,7 +431,7 @@ alternativeArgs = do argss <- many alternativeArg
 emptyTypeDecl = do (tycon,tyargs) <- try $ do
                      _ <- reserved "data"
                      tycon <- decName
-                     tyargs <- many typeArg
+                     tyargs <- typeArgs
                      _ <- reserved "end"
                      return (tycon,tyargs)
                    return $ TypeDeclaration tycon tyargs []
@@ -439,7 +439,7 @@ emptyTypeDecl = do (tycon,tyargs) <- try $ do
 nonEmptyTypeDecl = do (tycon,tyargs) <- try $ do
                         _ <- reserved "data"
                         tycon <- decName
-                        tyargs <- many typeArg
+                        tyargs <- typeArgs
                         _ <- reserved "where"
                         return (tycon,tyargs)
                       _ <- optional (reservedOp "|")
@@ -448,18 +448,21 @@ nonEmptyTypeDecl = do (tycon,tyargs) <- try $ do
                       return $ TypeDeclaration tycon tyargs alts
 
 explTypeArg = parens $ do
-                x <- varName
+                xs <- many1 varName
                 _ <- reservedOp ":"
                 t <- term
-                return $ DeclArg Expl x t
+                return $ [ DeclArg Expl x t | x <- xs ]
 
 implTypeArg = braces $ do
-                x <- varName
+                xs <- many1 varName
                 _ <- reservedOp ":"
                 t <- term
-                return $ DeclArg Impl x t
+                return $ [ DeclArg Impl x t | x <- xs ]
 
 typeArg = explTypeArg <|> implTypeArg
+
+typeArgs = do argss <- many typeArg
+              return (concat argss)
 
 typeDecl = emptyTypeDecl <|> nonEmptyTypeDecl
 
