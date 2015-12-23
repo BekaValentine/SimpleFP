@@ -67,6 +67,11 @@ instance Eval (Environment (String,String) Term) Term where
          case lookup (mdl,var) env of
            Nothing -> throwError $ "Unknown constant/defined term: " ++ show (DottedVar mdl var)
            Just m  -> eval m
+  eval (AbsoluteDottedVar mdl var)
+    = do env <- environment
+         case lookup (mdl,var) env of
+           Nothing -> throwError $ "Unknown constant/defined term: " ++ show (AbsoluteDottedVar mdl var)
+           Just m  -> eval m
   eval (Ann m _)
     = eval m
   eval Type

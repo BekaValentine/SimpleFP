@@ -383,6 +383,47 @@ whereTermDecl = do (x,t) <- try $ do
                    _ <- reserved "end"
                    return $ WhereDeclaration x t preclauses
 
+letFamilyDecl = do try $ do
+                     _ <- reserved "let"
+                     _ <- reserved "family"
+                     return ()
+                   x <- varName
+                   args <- typeArgs
+                   _ <- reservedOp ":"
+                   t <- term
+                   _ <- reserved "end"
+                   return $ LetFamilyDeclaration x args t
+
+letInstanceDecl = do  try $ do
+                        _ <- reserved "let"
+                        _ <- reserved "instance"
+                        return ()
+                      n <- letInstanceName
+                      _ <- reserved "where"
+                      _ <- optional (reservedOp "|")
+                      preclauses <- instancePatternMatchClause n `sepBy1` reservedOp "|"
+                      _ <- reserved "end"
+                      return $ LetInstanceDeclaration n preclauses
+
+letInstanceBareName = do x <- varName
+                         guard (x /= "_")
+                         return $ Left x
+
+letInstanceDottedName = try $ do
+                       modName <- decName
+                       _ <- reservedOp "."
+                       valName <- varName
+                       return $ Right (modName, valName)
+
+letInstanceName = letInstanceDottedName <|> letInstanceBareName
+
+instancePatternMatchClause c = do c' <- letInstanceName
+                                  guard (c == c')
+                                  (ps,xs) <- wherePatternSeq
+                                  _ <- reservedOp "="
+                                  b <- term
+                                  return $ (map fst ps, (map snd ps,xs,b))
+
 patternMatchClause x = do _ <- symbol x
                           (ps,xs) <- wherePatternSeq
                           _ <- reservedOp "="
@@ -405,7 +446,10 @@ wherePatternSeq = do psxs <- many wherePattern
                      let (ps,xss) = unzip psxs
                      return (ps,concat xss)
 
-termDecl = eqTermDecl <|> whereTermDecl
+termDecl = letFamilyDecl
+       <|> letInstanceDecl
+       <|> eqTermDecl
+       <|> whereTermDecl
 
 alternative = do c <- decName
                  as <- alternativeArgs
@@ -433,7 +477,7 @@ alternativeArgs = do argss <- many alternativeArg
 emptyTypeDecl = do (tycon,tyargs) <- try $ do
                      _ <- reserved "data"
                      tycon <- decName
-                     tyargs <- many typeArg
+                     tyargs <- typeArgs
                      _ <- reserved "end"
                      return (tycon,tyargs)
                    return $ TypeDeclaration tycon tyargs []
@@ -441,7 +485,7 @@ emptyTypeDecl = do (tycon,tyargs) <- try $ do
 nonEmptyTypeDecl = do (tycon,tyargs) <- try $ do
                         _ <- reserved "data"
                         tycon <- decName
-                        tyargs <- many typeArg
+                        tyargs <- typeArgs
                         _ <- reserved "where"
                         return (tycon,tyargs)
                       _ <- optional (reservedOp "|")
@@ -450,25 +494,28 @@ nonEmptyTypeDecl = do (tycon,tyargs) <- try $ do
                       return $ TypeDeclaration tycon tyargs alts
 
 explTypeArg = parens $ do
-                x <- varName
+                xs <- many1 varName
                 _ <- reservedOp ":"
                 t <- term
-                return $ DeclArg Expl x t
+                return $ [ DeclArg Expl x t | x <- xs ]
 
 implTypeArg = braces $ do
-                x <- varName
+                xs <- many1 varName
                 _ <- reservedOp ":"
                 t <- term
-                return $ DeclArg Impl x t
+                return $ [ DeclArg Impl x t | x <- xs ]
 
 typeArg = explTypeArg <|> implTypeArg
+
+typeArgs = do argss <- many typeArg
+              return (concat argss)
 
 dataFamilyDecl = do try $ do
                       _ <- reserved "data"
                       _ <- reserved "family"
                       return ()
                     tycon <- decName
-                    tyargs <- many typeArg
+                    tyargs <- typeArgs
                     _ <- reserved "end"
                     return $ DataFamilyDeclaration tycon tyargs
 
@@ -476,7 +523,7 @@ dataInstanceDecl = do try $ do
                         _ <- reserved "data"
                         _ <- reserved "instance"
                         return ()
-                      tycon <- decName
+                      tycon <- constructor
                       _ <- reserved "where"
                       _ <- optional (reservedOp "|")
                       alts <- alternative `sepBy` reservedOp "|"

@@ -42,11 +42,13 @@ instance Eq Variable where
 data Constructor
   = BareCon String
   | DottedCon String String
+  | AbsoluteDottedCon String String
   deriving (Eq)
 
 instance Show Constructor where
   show (BareCon con) = con
   show (DottedCon m con) = m ++ "." ++ con
+  show (AbsoluteDottedCon m con) = m ++ "." ++ con
 
 data Telescope
   = TelescopeNil
@@ -56,6 +58,7 @@ data Term
   = Meta Int
   | Var Variable
   | DottedVar String String
+  | AbsoluteDottedVar String String
   | Ann Term Term
   | Type
   | Fun Plicity Term (Scope Term Term)
@@ -145,6 +148,8 @@ instance ParenLoc Term where
     = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,ExplAppRight,ImplAppRight,ExplConArg,ImplConArg,AssertionPatArg,RecDotArg]
   parenLoc (DottedVar _ _)
     = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,ExplAppRight,ImplAppRight,ExplConArg,ImplConArg,AssertionPatArg,RecDotArg]
+  parenLoc (AbsoluteDottedVar _ _)
+    = [AnnLeft,FunArg,FunRet,LamBody,AppLeft,ExplAppRight,ImplAppRight,ExplConArg,ImplConArg,AssertionPatArg,RecDotArg]
   parenLoc (Ann _ _)
     = [FunArg,FunRet,LamBody,ImplAppRight,ImplConArg]
   parenLoc Type
@@ -174,6 +179,8 @@ instance ParenRec Term where
   parenRec (Var x)
     = show x
   parenRec (DottedVar m x)
+    = m ++ "." ++ x
+  parenRec (AbsoluteDottedVar m x)
     = m ++ "." ++ x
   parenRec (Ann m ty)
     = parenthesize (Just AnnLeft) m ++ " : " ++ parenthesize (Just AnnRight) ty
@@ -263,6 +270,7 @@ metas x = nub (go x)
     go (Meta i) = [i]
     go (Var _) = []
     go (DottedVar _ _) = []
+    go (AbsoluteDottedVar _ _) = []
     go (Ann m t) = go m ++ go t
     go Type = []
     go (Fun _ a sc) = go a ++ go (descope (Var . Name) sc)

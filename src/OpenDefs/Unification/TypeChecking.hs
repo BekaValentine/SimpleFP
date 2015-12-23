@@ -111,6 +111,8 @@ occurs :: MetaVar -> Term -> Bool
 occurs x (Meta y)         = x == y
 occurs _ (Var _)          = False
 occurs _ (DottedVar _ _)  = False
+occurs _ (AbsoluteDottedVar _ _)
+                          = False
 occurs x (Ann m t)        = occurs x m || occurs x t
 occurs _ Type             = False
 occurs x (Fun _ a sc)     = occurs x a || occurs x (descope (Var . Name) sc)
@@ -173,6 +175,11 @@ solve eqs0 = go eqs0 []
       = do unless (m1 == m2 && x1 == x2)
              $ throwError $ "Cannot unify symbols " ++ show (DottedVar m1 x1)
             ++ " and " ++ show (DottedVar m2 x2)
+           go eqs subs'
+    go (Equation (AbsoluteDottedVar m1 x1) (AbsoluteDottedVar m2 x2):eqs) subs'
+      = do unless (m1 == m2 && x1 == x2)
+             $ throwError $ "Cannot unify symbols " ++ show (AbsoluteDottedVar m1 x1)
+            ++ " and " ++ show (AbsoluteDottedVar m2 x2)
            go eqs subs'
     go (Equation (Ann m1 t1) (Ann m2 t2) : eqs) subs'
       = go (Equation m1 m2 : Equation t1 t2 : eqs) subs'
@@ -353,6 +360,8 @@ instantiateMetas subs (Meta i)
       Just t  -> instantiateMetas subs t
 instantiateMetas _ (DottedVar m x)
   = DottedVar m x
+instantiateMetas _ (AbsoluteDottedVar m x)
+  = AbsoluteDottedVar m x
 instantiateMetas subs (Ann m t)
   = Ann (instantiateMetas subs m) (instantiateMetas subs t)
 instantiateMetas _ Type
@@ -431,21 +440,30 @@ typeInSignature (BareCon n0)
        (m,n) <- unalias (Left n0)
        case lookup (m,n) consigs of
          Nothing -> throwError $ "Unknown constructor: " ++ show (DottedCon m n)
-         Just t  -> return (DottedCon m n, t)
+         Just t  -> return (AbsoluteDottedCon m n, t)
 typeInSignature (DottedCon m n)
   = do consigs <- signature
        (m',n') <- unalias (Right (m,n))
        case lookup (m',n') consigs of
          Nothing -> throwError $ "Unknown constructor: " ++ show (DottedCon m' n')
-         Just t  -> return (DottedCon m' n', t)
+         Just t  -> return (AbsoluteDottedCon m' n', t)
+typeInSignature (AbsoluteDottedCon m n)
+  = do consigs <- signature
+       case lookup (m,n) consigs of
+         Nothing -> throwError $ "Unknown constructor: " ++ show (AbsoluteDottedCon m n)
+         Just t  -> return (AbsoluteDottedCon m n, t)
+
+absoluteDottedTypeInDefinitions :: String -> String -> TypeChecker ((String,String),Term)
+absoluteDottedTypeInDefinitions m x
+  = do defs <- definitions
+       case find (\(mx,_,_) -> mx == (m,x)) defs of
+         Nothing      -> throwError $ "Unknown constant/defined term: " ++ m ++ "." ++ x
+         Just (_,_,t) -> return ((m,x),t)
 
 dottedTypeInDefinitions :: String -> String -> TypeChecker ((String,String),Term)
 dottedTypeInDefinitions m x
   = do (m',x') <- unalias (Right (m,x))
-       defs <- definitions
-       case find (\(mx,_,_) -> mx == (m',x')) defs of
-         Nothing      -> throwError $ "Unknown constant/defined term: " ++ m' ++ "." ++ x'
-         Just (_,_,t) -> return ((m',x'),t)
+       absoluteDottedTypeInDefinitions m' x'
 
 typeInDefinitions :: String -> TypeChecker ((String,String),Term)
 typeInDefinitions x0
@@ -479,13 +497,16 @@ inferify (Meta i)
               ++ " appears in checkable code, when it should not."
 inferify (Var (Name x0))
   = do ((m,x),t) <- typeInDefinitions x0
-       return (DottedVar m x, t)
+       return (AbsoluteDottedVar m x, t)
 inferify (Var (Generated x i))
   = do t <- typeInContext i
        return (Var (Generated x i), t)
 inferify (DottedVar m x)
   = do ((m',x'),t) <- dottedTypeInDefinitions m x
-       return (DottedVar m' x', t)
+       return (AbsoluteDottedVar m' x', t)
+inferify (AbsoluteDottedVar m x)
+  = do ((m',x'),t) <- absoluteDottedTypeInDefinitions m x
+       return (AbsoluteDottedVar m' x', t)
 inferify (Ann m t)
   = do t' <- checkify t Type
        et' <- evaluate t'

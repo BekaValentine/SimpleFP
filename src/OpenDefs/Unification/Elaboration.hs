@@ -5,7 +5,7 @@ module OpenDefs.Unification.Elaboration where
 import Control.Applicative ((<$>))
 import Control.Monad.Except
 import Control.Monad.State
-import Data.List (nub,(\\),intersect,sort,groupBy,partition)
+import Data.List (nub,(\\),intersect,sort,groupBy,partition,find)
 
 import Plicity
 import Scope
@@ -18,6 +18,8 @@ import OpenDefs.Unification.TypeChecking hiding (aliases,putAliases,moduleNames)
 
 
 
+type OpenFunction = ((String,String),(Term,[Plicity],CaseMotive,[Clause]))
+
 data ElabState
   = ElabState
     { elabSig :: Signature Term
@@ -27,12 +29,14 @@ data ElabState
     , elabAliases :: ModuleAliases
     , elabModName :: String
     , elabModuleNames :: [String]
+    , elabOpenData :: [(String,String)]
+    , elabOpenFunctions :: [OpenFunction]
     }
 
 type Elaborator a = StateT ElabState (Either String) a
 
 runElaborator :: Elaborator () -> Either String ElabState
-runElaborator elab = do (_,p) <- runStateT elab (ElabState [] [] [] 0 [] "" [])
+runElaborator elab = do (_,p) <- runStateT elab (ElabState [] [] [] 0 [] "" [] [] [])
                         return p
 
 signature :: Elaborator (Signature Term)
@@ -66,10 +70,14 @@ putAliases :: ModuleAliases -> Elaborator ()
 putAliases als = do s <- get
                     put (s { elabAliases = als })
 
+addAliasFor :: Either String (String,String) -> (String,String) -> Elaborator ()
+addAliasFor a b = do als <- aliases
+                     putAliases ((a,b):als)
+
 addAlias :: String -> Elaborator ()
-addAlias n = do als <- aliases
-                m <- moduleName
-                putAliases ((Left n,(m,n)):(Right (m,n),(m,n)):als)
+addAlias n = do m <- moduleName
+                addAliasFor (Left n) (m,n)
+                addAliasFor (Right (m,n)) (m,n)
 
 putModuleName :: String -> Elaborator ()
 putModuleName m = do s <- get
@@ -88,6 +96,20 @@ addModuleName m
        unless (not (m `elem` ms))
          $ throwError $ "A module is already declared with the name " ++ m
        putModuleNames (m:ms)
+
+openData :: Elaborator [(String,String)]
+openData = elabOpenData <$> get
+
+putOpenData :: [(String,String)] -> Elaborator ()
+putOpenData od = do s <- get
+                    put (s { elabOpenData = od })
+
+openFunctions :: Elaborator [OpenFunction]
+openFunctions = elabOpenFunctions <$> get
+
+putOpenFunctions :: [OpenFunction] -> Elaborator ()
+putOpenFunctions fs = do s <- get
+                         put (s { elabOpenFunctions = fs })
 
 ensureOpenSettingsAreValid :: [OpenSettings] -> Elaborator ()
 ensureOpenSettingsAreValid oss
@@ -200,13 +222,13 @@ newAliases sig defs (os:oss)
     ased (Just m') ns = [ (Right (m',x), (m,n)) | (x,(m,n)) <- ns ]
 
 when' :: TypeChecker a -> Elaborator () -> Elaborator ()
-when' tc e = do ElabState sig defs ctx i als _ ms <- get
+when' tc e = do ElabState sig defs ctx i als _ ms _ _ <- get
                 case runTypeChecker tc sig defs ctx i als ms of
                   Left _  -> return ()
                   Right _ -> e
 
 liftTC :: TypeChecker a -> Elaborator a
-liftTC tc = do ElabState sig defs ctx i als _ ms <- get
+liftTC tc = do ElabState sig defs ctx i als _ ms _ _ <- get
                case runTypeChecker tc sig defs ctx i als ms of
                  Left e  -> throwError e
                  Right (a,s) -> do s' <- get
@@ -219,12 +241,23 @@ addDeclaration n def ty = do defs <- definitions
                              m <- moduleName
                              putDefinitions (((m,n),def,ty) : defs)
 
-addConstructor :: String -> ConSig Term -> Elaborator ()
-addConstructor c consig
-  = do sig <- signature
+updateDeclaration :: String -> Term -> Term -> Elaborator ()
+updateDeclaration n def ty
+  = do defs <- definitions
        m <- moduleName
+       putDefinitions [ if p == (m,n) then (p,def,ty) else d
+                      | d@(p,_,_) <- defs
+                      ]
+
+addConstructorToModule :: String -> String -> ConSig Term -> Elaborator ()
+addConstructorToModule m c consig
+  = do sig <- signature
        putSignature (((m,c),consig):sig)
 
+addConstructor :: String -> ConSig Term -> Elaborator ()
+addConstructor c consig
+  = do m <- moduleName
+       addConstructorToModule m c consig
 
 
 elabTermDecl :: TermDeclaration -> Elaborator ()
@@ -255,15 +288,11 @@ elabTermDecl (WhereDeclaration n ty preclauses)
                   -> do let mot = motiveAux (length truePlics) ty
                             clauses = [ clauseHelper (truePatterns truePlics ps) xs b | (_,(ps,xs,b)) <- preclauses ]
                             plicsForLambdaAux = map (either id id) truePlics
-                        elabTermDecl (TermDeclaration n ty (lambdaAux (\as -> Case as mot clauses) plicsForLambdaAux))
+                        elabTermDecl (TermDeclaration n ty (buildLambda (\as -> Case as mot clauses) plicsForLambdaAux))
   where
     isVarPat :: Pattern -> Bool
     isVarPat (VarPat _) = True
     isVarPat _ = False
-    
-    lambdaAux :: ([Term] -> Term) -> [Plicity] -> Term
-    lambdaAux f [] = f []
-    lambdaAux f (plic:plics) = Lam plic (Scope ["_" ++ show (length plics)] $ \[x] -> lambdaAux (f . (x:)) plics)
     
     truePlicities :: [Plicity] -> Term -> Maybe [Either Plicity Plicity]
     truePlicities [] _ = Just []
@@ -289,28 +318,113 @@ elabTermDecl (WhereDeclaration n ty preclauses)
       = p : truePatterns plics ps
     truePatterns (Left _:plics) ps
       = MakeMeta : truePatterns plics ps
+elabTermDecl (LetFamilyDeclaration n args ty)
+  = do when' (typeInDefinitions n)
+           $ throwError ("Term already defined: " ++ n)
+       let (ty,plics,mot) = convertArgs args
+       ty' <- liftTC (checkify ty Type)
+       mot' <- liftTC (checkifyCaseMotive mot)
+       m <- moduleName
+       fs <- openFunctions
+       case lookup (m,n) fs of
+         Nothing
+           -> do putOpenFunctions (((m,n),(ty',plics,mot',[])) : fs)
+                 let initialDef = buildLambda (\xs -> Case xs mot' []) plics
+                 addAlias n
+                 initialDef' <- liftTC $ extendDefinitions [((m,n),initialDef,ty')] (check initialDef ty')
+                 addDeclaration n initialDef' ty
+         Just _
+           -> throwError $ "The open function " ++ show (DottedVar m n) ++ " has already been declared."
+  where
+    convertArgs :: [DeclArg] -> (Term, [Plicity], CaseMotive)
+    convertArgs []
+      = (ty, [], CaseMotiveNil ty)
+    convertArgs (DeclArg plic x t:as)
+      = let (b, plics, mot) = convertArgs as
+        in (funHelper plic x t b, plic:plics, consMotiveHelper x t mot)
+elabTermDecl (LetInstanceDeclaration n preclauses)
+  = do let aliasedName = case n of
+                           Left n0 -> Var (Name n0)
+                           Right (m0,n0) -> DottedVar m0 n0
+       (m',n') <- liftTC $ unalias n
+       fs <- openFunctions
+       case lookup (m',n') fs of
+         Nothing
+           -> throwError $ "No open function named " ++ show aliasedName ++ " has been declared."
+         Just (ty,plics,mot,clauses)
+           -> do clauses'
+                   <- forM preclauses $ \(plics',(ps,xs,b)) -> do
+                        case insertMetas plics plics' of
+                          Nothing
+                            -> throwError $ "Instance for open function " ++ show aliasedName ++ " has invalid argument plicities."
+                          Just bs
+                            -> return $ clauseHelper (truePatterns bs ps) xs b
+                 let newClauses = clauses ++ clauses'
+                     newDef = buildLambda (\xs -> Case xs mot newClauses) plics
+                     newOpenFunctions = ((m',n'),(ty,plics,mot,newClauses)) : filter (\(p,_) -> p /= (m',n')) fs
+                 newDef' <- liftTC $ extendDefinitions [((m',n'), newDef, ty)] (check newDef ty)
+                 putOpenFunctions newOpenFunctions
+                 defs <- definitions
+                 putDefinitions (((m',n'),newDef',ty) : filter (\(p,_,_) -> p /= (m',n')) defs)
+  where
+    insertMetas :: [Plicity] -> [Plicity] -> Maybe [Bool]
+    insertMetas [] []
+      = Just []
+    insertMetas (Expl:args) (Expl:plics)
+      = do rest <- insertMetas args plics
+           return $ False:rest
+    insertMetas (Expl:_) (Impl:_)
+      = Nothing
+    insertMetas (Impl:args) (Expl:plics)
+      = do rest <- insertMetas args plics
+           return $ True:rest
+    insertMetas (Impl:args) (Impl:plics)
+      = do rest <- insertMetas args plics
+           return $ False:rest
+    
+    truePatterns :: [Bool] -> [Pattern] -> [Pattern]
+    truePatterns [] [] = []
+    truePatterns (False:plics) (p:ps)
+      = p : truePatterns plics ps
+    truePatterns (True:plics) ps
+      = MakeMeta : truePatterns plics ps
+
+buildLambda :: ([Term] -> Term) -> [Plicity] -> Term
+buildLambda f [] = f []
+buildLambda f (plic:plics) = Lam plic (Scope ["_" ++ show (length plics)] $ \[x] -> buildLambda (f . (x:)) plics)
 
 
+validConSig :: Constructor -> Constructor -> ConSig Term -> Elaborator ()
+validConSig tycon c (ConSigNil (Con tc _))
+  = unless (tc == tycon)
+      $ throwError $ "The constructor " ++ show c ++ " should constructor a value of the type " ++ show tycon
+                  ++ " but instead produces a " ++ show tc
+validConSig tycon c (ConSigNil a)
+  = throwError $ "The constructor " ++ show c ++ " should constructor a value of the type " ++ show tycon
+              ++ " but instead produces " ++ show a
+validConSig tycon c (ConSigCons _ _ sc)
+  = validConSig tycon c (descope (Var . Name) sc)
 
 elabAlt :: String -> String -> ConSig Term -> Elaborator ()
 elabAlt tycon c consig
-  = do validConSig consig
+  = do validConSig (BareCon tycon) (BareCon c) consig
        when' (typeInSignature (BareCon c))
            $ throwError ("Constructor already declared: " ++ c)
        addAlias c
        consig' <- liftTC (checkifyConSig consig)
        addConstructor c consig'
-  where
-    validConSig :: ConSig Term -> Elaborator ()
-    validConSig (ConSigNil (Con (BareCon tc) _))
-      = unless (tc == tycon)
-          $ throwError $ "The constructor " ++ c ++ " should constructor a value of the type " ++ tycon
-                      ++ " but instead produces a " ++ tc
-    validConSig (ConSigNil a)
-      = throwError $ "The constructor " ++ c ++ " should constructor a value of the type " ++ tycon
-                  ++ " but instead produces " ++ show a
-    validConSig (ConSigCons _ _ sc)
-      = validConSig (descope (Var . Name) sc)
+
+elabInstanceAlt :: String -> Constructor -> String -> ConSig Term -> Elaborator ()
+elabInstanceAlt m localTycon c consig
+  = do validConSig localTycon (BareCon c) consig
+       sig <- signature
+       case lookup (m,c) sig of
+         Just _
+           -> throwError ("Constructor already declared: " ++ c)
+         Nothing
+           -> do addAliasFor (Left c) (m,c)
+                 consig' <- liftTC (checkifyConSig consig)
+                 addConstructorToModule m c consig'
 
 elabTypeDecl :: TypeDeclaration -> Elaborator ()
 elabTypeDecl (TypeDeclaration tycon tyconargs alts)
@@ -328,8 +442,18 @@ elabTypeDecl (DataFamilyDeclaration tycon tyconargs)
        addAlias tycon
        tyconSig' <- liftTC (checkifyConSig tyconSig)
        addConstructor tycon tyconSig'
+       m <- moduleName
+       od <- openData
+       putOpenData ((m,tycon):od)
 elabTypeDecl (DataInstanceDeclaration tycon alts)
-  = mapM_ (uncurry (elabAlt tycon)) alts
+  = do let aliasedName = case tycon of
+                           BareCon c -> Left c
+                           DottedCon m c -> Right (m,c)
+       (m',c') <- liftTC $ unalias aliasedName
+       od <- openData
+       unless ((m',c') `elem` od)
+         $ throwError $ "The constructor " ++ show tycon ++ " is not an open data type."
+       mapM_ (uncurry (elabInstanceAlt m' tycon)) alts
 
 elabModule :: Module -> Elaborator ()
 elabModule (Module m settings stmts0)

@@ -16,6 +16,16 @@ import OpenDefs.Core.Term
 data TermDeclaration
   = TermDeclaration String Term Term
   | WhereDeclaration String Term [([Plicity],([Pattern],[String],Term))]
+  | LetFamilyDeclaration String [DeclArg] Term
+  | LetInstanceDeclaration (Either String (String,String)) [([Plicity],([Pattern],[String],Term))]
+
+showPreclause :: ([Plicity],([Pattern],[String],Term)) -> String
+showPreclause (plics,(ps,_,b))
+  = intercalate " || " (map showPattern (zip plics ps)) ++ " -> " ++ show b
+
+showPattern :: (Plicity,Pattern) -> String
+showPattern (Expl,p) = parenthesize (Just ExplConPatArg) p
+showPattern (Impl,p) = parenthesize (Just ImplConPatArg) p
 
 instance Show TermDeclaration where
   show (TermDeclaration n ty def)
@@ -23,14 +33,11 @@ instance Show TermDeclaration where
   show (WhereDeclaration n ty preclauses)
     = "let " ++ n ++ " : " ++ show ty ++ " where "
         ++ intercalate " | " (map showPreclause preclauses)
-    where
-      showPreclause :: ([Plicity],([Pattern],[String],Term)) -> String
-      showPreclause (plics,(ps,_,b))
-        = intercalate " || " (map showPattern (zip plics ps)) ++ " -> " ++ show b
-      
-      showPattern :: (Plicity,Pattern) -> String
-      showPattern (Expl,p) = parenthesize (Just ExplConPatArg) p
-      showPattern (Impl,p) = parenthesize (Just ImplConPatArg) p
+  show (LetFamilyDeclaration n args ty)
+    = "let family " ++ n ++ " " ++ unwords (map show args) ++ " : " ++ show ty ++ " end"
+  show (LetInstanceDeclaration n preclauses)
+    = "let instance " ++ show n ++ " where "
+        ++ intercalate " | " (map showPreclause preclauses)
 
 
 
@@ -39,7 +46,7 @@ instance Show TermDeclaration where
 data TypeDeclaration
   = TypeDeclaration String [DeclArg] [(String,ConSig Term)]
   | DataFamilyDeclaration String [DeclArg]
-  | DataInstanceDeclaration String [(String,ConSig Term)]
+  | DataInstanceDeclaration Constructor [(String,ConSig Term)]
 
 instance Show TypeDeclaration where
   show (TypeDeclaration tycon tyargs [])
@@ -51,7 +58,7 @@ instance Show TypeDeclaration where
   show (DataFamilyDeclaration tycon tyargs)
     = "data family " ++ tycon ++ concat (map (\x -> " " ++ show x) tyargs) ++ " end"
   show (DataInstanceDeclaration tycon alts)
-    = "data instance " ++ tycon ++ " where"
+    = "data instance " ++ show tycon ++ " where"
    ++ concat [ "\n" ++ c ++ " : " ++ showConSig (Var . Name) sig | (c,sig) <- alts ]
    ++ "\nend"
 

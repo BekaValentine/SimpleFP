@@ -39,7 +39,7 @@ repl src = case loadProgram src of
     loadProgram :: String -> Either String (Signature Term,Definitions,Context,Int,Environment (String,String) Term,[String])
     loadProgram src
       = do prog <- parseProgram src
-           ElabState sig defs ctx i _ _ ms <- runElaborator (elabProgram prog)
+           ElabState sig defs ctx i _ _ ms _ _ <- runElaborator (elabProgram prog)
            let env = [ (x,m) | (x,m,_) <- defs ]
            return (sig,defs,ctx,i,env,ms)
     

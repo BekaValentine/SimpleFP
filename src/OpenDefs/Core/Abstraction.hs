@@ -47,6 +47,8 @@ instance Abstract String Term Term where
     = return $ Var (Generated x i)
   abstract (DottedVar m var)
     = return $ DottedVar m var
+  abstract (AbsoluteDottedVar m var)
+    = return $ AbsoluteDottedVar m var
   abstract (Ann m ty)
     = Ann <$> abstract m <*> return ty
   abstract Type
@@ -80,6 +82,8 @@ instance Abstract Int Term Term where
           Just m  -> m
   abstract (DottedVar m var)
     = return $ DottedVar m var
+  abstract (AbsoluteDottedVar m var)
+    = return $ AbsoluteDottedVar m var
   abstract (Ann m ty)
     = Ann <$> abstract m <*> return ty
   abstract Type
@@ -113,6 +117,8 @@ instance Abstract String Variable Term where
     = return $ Var (Generated x i)
   abstract (DottedVar m var)
     = return $ DottedVar m var
+  abstract (AbsoluteDottedVar m var)
+    = return $ AbsoluteDottedVar m var
   abstract (Ann m ty)
     = Ann <$> abstract m <*> return ty
   abstract Type
@@ -146,6 +152,8 @@ instance Abstract Int Variable Term where
           Just y  -> Var y
   abstract (DottedVar m var)
     = return $ DottedVar m var
+  abstract (AbsoluteDottedVar m var)
+    = return $ AbsoluteDottedVar m var
   abstract (Ann m ty)
     = Ann <$> abstract m <*> return ty
   abstract Type
