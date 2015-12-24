@@ -91,5 +91,7 @@ instance Eval (Environment String Term) Term where
   eval (Case ms mot cs)
     = do ems <- mapM eval ms
          case matchClauses cs [ (Expl,em) | em <- ems ] of
-           Nothing -> throwError $ "Incomplete pattern match: " ++ show (Case ms mot cs)
+           Nothing -> if any (\p -> case p of { (Con _ _) -> False ; _ -> True }) ems
+                      then return (Case ms mot cs)
+                      else throwError $ "Incomplete pattern match: " ++ show (Case ms mot cs)
            Just b  -> eval b
