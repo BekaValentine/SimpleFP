@@ -735,9 +735,35 @@ checkify m t
   = do (m',t') <- inferify m
        et <- evaluate t
        et' <- evaluate t'
-       unify et et'
+       m'' <- subtype m' et' et
        subs <- substitution
-       return (instantiateMetas subs m')
+       return (instantiateMetas subs m'')
+  where
+    subtype :: Term -> Term -> Term -> TypeChecker Term
+    subtype m (Fun Expl a sc) (Fun Expl a' sc')
+      = do unify a a'
+           subs <- substitution
+           i <- newName
+           let b = instantiateMetas subs (instantiate sc [Var (Generated (head (names sc)) i)])
+               b' = instantiateMetas subs (instantiate sc' [Var (Generated (head (names sc)) i)])
+           subtype m b b'
+    subtype m (Fun Expl a sc) (Fun Impl a' sc')
+      = throwError $ "The type " ++ show (Fun Expl a sc) ++ " is not a subtype of " ++ show (Fun Impl a' sc')
+    subtype m (Fun Impl a sc) (Fun Expl a' sc')
+      = do i <- newMetaVar
+           subs <- substitution
+           let b = instantiate sc [Meta i]
+           subtype (App Impl m (Meta i)) b (Fun Expl a' sc')
+    subtype m (Fun Impl a sc) (Fun Impl a' sc')
+      = do unify a a'
+           i <- newName
+           subs <- substitution
+           let b = instantiateMetas subs (instantiate sc [Var (Generated (head (names sc)) i)])
+               b' = instantiateMetas subs (instantiate sc' [Var (Generated (head (names sc)) i)])
+           subtype m b b'
+    subtype m t t'
+      = do unify t t'
+           return m
 
 
 checkifyCaseMotive :: CaseMotive -> TypeChecker CaseMotive
